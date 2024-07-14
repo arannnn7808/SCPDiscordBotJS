@@ -4,6 +4,39 @@ Un bot para tu servidor de scpsl, tiene los comandos basicos para banear, expuls
 
 ## Este bot utiliza la api de https://scplist.kr
 
+## Descargar NODE.JS y NPM para linux.
+
+```bash
+# Instalar NVM para descargar el paquete
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+# Para hacer el siguiente comando tienes que reiniciar la maquina.
+# Haz el nvm install para instalar node js y npm
+nvm install 20
+# Aqui verificas que esta instalado NodeJS
+node -v # deberia darte `v20.15.1` si es una versión superior mejor
+# Aqui verificas que esta instalado NPM
+npm -v # deberia darte `10.7.0` si es una versión superior mejor
+```
+
+## Descargar NODE.JS y NPM para Windows.
+
+Enlace de descarga: https://nodejs.org/en/
+
+## Instalación
+
+Descarga el archivo ZIP de la ultima release, y lo extraes en tu ordenador, tu VPS, etc...
+
+```bash
+# Usa este comando para descargar todas las dependencias en la carpeta node_modules/
+npm install
+
+# Para iniciar el bot usa el comando
+node ./bot.js
+
+# Tambien esta el comando para recargar los slash (/) commands.
+node ./deploy-commands.js
+```
+
 ### Config archivo .env que debereis crear en la carpeta principal del bot
 ```env
 BOT_TOKEN=token-del-bot
