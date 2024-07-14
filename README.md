@@ -51,17 +51,19 @@ node ./deploy-commands.js
 
 ## Config archivo .env que debereis crear en la carpeta principal del bot
 ```env
-BOT_TOKEN=token-del-bot
+BOT_TOKEN=token del bot aqui
 
-CLIENT_ID=client-id-bot
+PRESENCE_TEXT=el texto que quieres que muestre el estado del bot
 
-STAFF_ROLE_ID=id-rol-staff
+CLIENT_ID=el client id del bot aqui
 
-MEGA_STAFF_ROLE=id-rol-staff-para-comandos-administración
+STAFF_ROLE_ID=id del rol de staff
 
-SERVER_NAME_SCPSL=El nombre de tu servidor aqui
+MEGA_STAFF_ROLE=id del rol de staff para comandos de administración importantes
 
-SERVER_ID_API=el-server-id-de-la-api-de-scplist
+SERVER_NAME_SCPSL=El nombre de tu servidor aqui de SCPSL
 
-LINK_IMAGE_SERVER=link-logo-de-tu-server
+SERVER_ID_API=el server api id de la pagina de scplist.kr
+
+LINK_IMAGE_SERVER=link del logo de tu servidor que acabe con el final .png, .jpg
 ```
