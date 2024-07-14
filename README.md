@@ -41,10 +41,13 @@ node ./deploy-commands.js
 
 ## Crear el Bot en el Developer Portal de Discord.
 
-1. Entra en el developer portal y inicia sesion en discord: https://discord.com/developers/applications
-2. Crea una aplicación nueva y ponle el nombre que desees
+1. Entra en el developer portal y inicia sesion en discord: https://discord.com/developers/applications.
+2. Crea una aplicación nueva y ponle el nombre que desees.
 3. Ahora puedes ponerle el logo que desees para que muestre en el bot.
-4. Y por ultimo dirigete a ``Bot`` y agarra el ``TOKEN`` para ponerlo en el archivo ``.env`` que crearás a continuación.
+4. Dirigete a ``Bot`` y agarra el ``TOKEN`` para ponerlo en el archivo ``.env`` que crearás a continuación.
+5. Dirigete a ``OAuth2`` y copia tambien el ``Client ID`` del bot que tambien pondrás en el archivo ``.env``.
+6. Después en ``Installation`` selecciona unicamente la opción ``Guild Install`` y en los permisos de abajo deberás tener en scopes ``applications.commands`` y ``bot``, y en Permissions usa ``Administrator``.
+7. Agarra el link que te dan en ``Install Link`` con la opción ``Discord Provided Link`` y pegalo el tu navegador para agregar el bot a tu servidor.
 
 ## Config archivo .env que debereis crear en la carpeta principal del bot
 ```env
