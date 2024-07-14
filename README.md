@@ -39,7 +39,14 @@ node ./deploy-commands.js
 # Deberia responderte como: Se estan refrescando los comandos (/). || Se han refrescado los comandos (/).
 ```
 
-### Config archivo .env que debereis crear en la carpeta principal del bot
+## Crear el Bot en el Developer Portal de Discord.
+
+1. Entra en el developer portal y inicia sesion en discord: https://discord.com/developers/applications
+2. Crea una aplicación nueva y ponle el nombre que desees
+3. Ahora puedes ponerle el logo que desees para que muestre en el bot.
+4. Y por ultimo dirigete a ``Bot`` y agarra el ``TOKEN`` para ponerlo en el archivo ``.env`` que crearás a continuación.
+
+## Config archivo .env que debereis crear en la carpeta principal del bot
 ```env
 BOT_TOKEN=token-del-bot
 
