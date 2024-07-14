@@ -32,9 +32,11 @@ npm install
 
 # Para iniciar el bot usa el comando
 node ./bot.js
+# Deberia de responderte: Bot conectado como "nombre del bot y #"
 
 # Tambien esta el comando para recargar los slash (/) commands.
 node ./deploy-commands.js
+# Deberia responderte como: Se estan refrescando los comandos (/). || Se han refrescado los comandos (/).
 ```
 
 ### Config archivo .env que debereis crear en la carpeta principal del bot
