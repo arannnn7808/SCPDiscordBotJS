@@ -1,0 +1,20 @@
+{
+  "name": "enigmabot",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@discordjs/builders": "^1.8.2",
+    "discord.js": "^14.15.3",
+    "@discordjs/rest": "^0.3.0",
+    "dotenv": "^16.4.5",
+    "node-fetch": "^3.0.0"
+  }
+}
