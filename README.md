@@ -2,8 +2,6 @@
 
 Un bot para tu servidor de scpsl, tiene los comandos basicos para banear, expulsar, etc... Tiene el comando /servidor, que es para ver la informacion del servidor de SCPSL. Este bot utiliza javascript y tiene el archivo .env, que se usa como config para las opciones que tiene.
 
-## Este bot utiliza la api de https://scplist.kr
-
 ## Descargar NODE.JS y NPM para linux.
 
 ```bash
@@ -39,6 +37,15 @@ node ./deploy-commands.js
 # Deberia responderte como: Se estan refrescando los comandos (/). || Se han refrescado los comandos (/).
 ```
 
+## Este bot utiliza la api de https://scplist.kr (como saber cual es mi server id)
+
+1. Dirigete a la pagina de https://scplist.kr.
+2. Busca tu servidor en el apartado de servidores.
+3. Cuando lo hayas encontrado haz click sobre él, y veras el estado y un grafico.
+4. En el link de la pagina web verás algo como esto "https://scplist.kr/servers/11111".
+5. Despues del /server los numeros que hay ahí es tu id del servidor.
+6. Ahora con la id ponla en el archivo ``.env`` en el apartado ``SERVER_ID_API``.
+
 ## Crear el Bot en el Developer Portal de Discord.
 
 1. Entra en el developer portal y inicia sesion en discord: https://discord.com/developers/applications.
@@ -63,7 +70,7 @@ MEGA_STAFF_ROLE=id del rol de staff para comandos de administración importantes
 
 SERVER_NAME_SCPSL=El nombre de tu servidor aqui de SCPSL
 
-SERVER_ID_API=el server api id de la pagina de scplist.kr
+SERVER_ID_API=el server api id de la pagina de scplist.kr, la documentacion esta en el apartado de: como saber cual es mi server id
 
 LINK_IMAGE_SERVER=link del logo de tu servidor que acabe con el final .png, .jpg
 ```
