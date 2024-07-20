@@ -1,6 +1,6 @@
 # SCPDiscordBot - Spanish Tutorial
 
-Un bot para tu servidor de scpsl, tiene los comandos basicos para banear, expulsar, etc... Tiene el comando /servidor, que es para ver la informacion del servidor de SCPSL. Este bot utiliza javascript y tiene el archivo .env, que se usa como config para las opciones que tiene.
+Un bot para tu servidor de scpsl, tiene los comandos básicos para banear, expulsar, etc... Tiene el comando /servidor, que es para ver la información del servidor de SCPSL. Este bot utiliza javascript y tiene el archivo .env, que se usa como config para las opciones que tiene.
 
 ## Descargar NODE.JS y NPM para linux.
 
@@ -64,13 +64,19 @@ PRESENCE_TEXT=el texto que quieres que muestre el estado del bot
 
 CLIENT_ID=el client id del bot aqui
 
-STAFF_ROLE_ID=id del rol de staff
-
-MEGA_STAFF_ROLE=id del rol de staff para comandos de administración importantes
-
 SERVER_NAME_SCPSL=El nombre de tu servidor aqui de SCPSL
 
 SERVER_ID_API=el server api id de la pagina de scplist.kr, la documentacion esta en el apartado de: como saber cual es mi server id
 
-LINK_IMAGE_SERVER=link del logo de tu servidor que acabe con el final .png, .jpg
+LINK_IMAGE_SERVER= URL de la imagen de tu server
 ```
+
+## Permisos de los comandos
+
+Los comandos ahora utilizan los permisos nativos de Discord:
+
+- `/kick`: Requiere el permiso "Expulsar miembros"
+- `/ban`: Requiere el permiso "Banear miembros"
+- `/say`: Requiere el permiso "Gestionar mensajes"
+
+Asegúrate de que los roles en tu servidor de Discord tengan los permisos adecuados para usar estos comandos.
