@@ -19,6 +19,7 @@ module.exports = {
     },
 };
 
+// Exportar la información de la api para usarla
 async function fetchServerData() {
     const serveridapi = process.env.SERVER_ID_API;
     const proxyUrl = 'https://api.allorigins.win/raw?url=';
@@ -33,7 +34,7 @@ async function fetchServerData() {
 
     return response.json();
 }
-
+// Crear el embed cuando tiene respuesta de la api (json)
 function createServerEmbed(data) {
     const estado = data.online ? '🟢 Activo' : '🔴 Inactivo';
     const friendlyfire = data.friendlyFire ? '✅ Activado' : '❌ Desactivado';
@@ -52,7 +53,7 @@ function createServerEmbed(data) {
         .setFooter({ text: `IP: ${data.ip}:${data.port}` })
         .setTimestamp();
 }
-
+// No tiene respuesta de la api (json)
 async function handleFetchError(interaction, error) {
     const errorEmbed = new EmbedBuilder()
         .setColor('#FF0000')

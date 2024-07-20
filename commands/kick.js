@@ -17,12 +17,12 @@ module.exports = {
         const targetUser = interaction.options.getMember('usuario');
         const reason = interaction.options.getString('razon') || 'No se proporcionó razón';
 
-        // Check if the bot has permission to kick members
+        // Revisar si el bot tiene permiso para expulsar a miembros
         if (!interaction.guild.members.me.permissions.has(PermissionFlagsBits.KickMembers)) {
             return interaction.reply({ content: 'No tengo permisos para expulsar usuarios.', ephemeral: true });
         }
 
-        // Check if the target user is kickable
+        // Revisar si el usuario puede ser expulsado
         if (!targetUser.kickable) {
             return interaction.reply({ content: 'No puedo expulsar a este usuario. Su rol puede ser más alto que el mío.', ephemeral: true });
         }

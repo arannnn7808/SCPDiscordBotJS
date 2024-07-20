@@ -16,11 +16,13 @@ module.exports = {
     async execute(interaction) {
         const user = interaction.options.getUser('usuario');
         const reason = interaction.options.getString('razon');
-
+        
+        // Revisar si el bot tiene permisos para banear
         if (!interaction.member.permissions.has(PermissionFlagsBits.BanMembers)) {
             return await interaction.reply({ content: 'No tienes permisos para banear usuarios.', ephemeral: true });
         }
 
+        // Revisar si puede banear al usuario y hacerlo.
         try {
             await interaction.guild.members.ban(user, { reason });
             await interaction.reply({ content: `Usuario ${user.tag} baneado correctamente por: ${reason}`, ephemeral: true });

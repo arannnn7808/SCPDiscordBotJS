@@ -7,9 +7,9 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('ayuda')
         .setDescription('Muestra una lista de todos los comandos disponibles'),
-    cooldown: 10, // Cooldown in seconds
+    cooldown: 10, // Segundos del cooldown para el comando
     async execute(interaction) {
-        // Cooldown check
+        // Hacer la revision del cooldown
         const { id } = interaction.user;
         if (cooldowns.has(id)) {
             const expirationTime = cooldowns.get(id) + this.cooldown * 1000;
