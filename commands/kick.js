@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require('@discordjs/builders');
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -11,25 +11,28 @@ module.exports = {
         .addStringOption(option =>
             option.setName('razon')
                 .setDescription('Razón de la expulsión')
-                .setRequired(true)),
+                .setRequired(false))
+        .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers),
     async execute(interaction) {
-        const user = interaction.options.getUser('usuario');
-        const reason = interaction.options.getString('razon');
+        const targetUser = interaction.options.getMember('usuario');
+        const reason = interaction.options.getString('razon') || 'No se proporcionó razón';
 
-        // Verificar si el usuario tiene el rol necesario para expulsar
-        if (!interaction.member.roles.cache.has(process.env.MEGA_STAFF_ROLE)) {
-            return await interaction.reply({ content: 'No tienes permisos para expulsar usuarios.', ephemeral: true });
+        // Check if the bot has permission to kick members
+        if (!interaction.guild.members.me.permissions.has(PermissionFlagsBits.KickMembers)) {
+            return interaction.reply({ content: 'No tengo permisos para expulsar usuarios.', ephemeral: true });
+        }
+
+        // Check if the target user is kickable
+        if (!targetUser.kickable) {
+            return interaction.reply({ content: 'No puedo expulsar a este usuario. Su rol puede ser más alto que el mío.', ephemeral: true });
         }
 
         try {
-            await interaction.guild.members.kick(user, { reason });
-
-            await user.send(`Has sido expulsado de ${interaction.guild.name} por: ${reason}`);
-
-            await interaction.reply({ content: `Usuario ${user.tag} expulsado correctamente por: ${reason}`, ephemeral: true });
+            await targetUser.kick(reason);
+            await interaction.reply({ content: `Usuario ${targetUser.user.tag} expulsado correctamente.\nRazón: ${reason}`, ephemeral: true });
         } catch (error) {
             console.error('Error al intentar expulsar al usuario:', error);
-            await interaction.reply({ content: 'Hubo un error al intentar expulsar al usuario.\nLos errores pueden ser:\nEs un bot, se ha expulsado y no puede recivir mensajes al MD(Si es esta opción se ha expulsado pero no le ha llegado la razón)\nNo tienes permisos para expulsar', ephemeral: true });
+            await interaction.reply({ content: 'Hubo un error al intentar expulsar al usuario.', ephemeral: true });
         }
     },
 };
