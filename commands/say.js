@@ -1,19 +1,16 @@
-require('dotenv').config();
-const { SlashCommandBuilder } = require('@discordjs/builders');
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('say')
         .setDescription('Repite el mensaje proporcionado.')
-        .addStringOption(option => 
+        .addStringOption(option =>
             option.setName('message')
                 .setDescription('El mensaje que quieres que repita el bot')
-                .setRequired(true)),
+                .setRequired(true))
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
     async execute(interaction) {
-        const roleId = process.env.STAFF_ROLE_ID;
-        const member = interaction.member;
-        
-        if (!member.roles.cache.has(roleId)) {
+        if (!interaction.member.permissions.has(PermissionFlagsBits.ManageMessages)) {
             return interaction.reply({ content: 'No tienes permisos para usar este comando.', ephemeral: true });
         }
 

@@ -7,19 +7,22 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBit
 
 client.commands = new Collection();
 
-function loadCommandsFromFolder(folder) {
-    const commandsPath = path.join(__dirname, folder);
-    const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
-
-    for (const file of commandFiles) {
-        const filePath = path.join(commandsPath, file);
-        const command = require(filePath);
-        client.commands.set(command.data.name, command);
-    }
+function loadCommands() {
+    const commandFolders = ['commands', 'api'];
+    commandFolders.forEach(folder => {
+        const commandsPath = path.join(__dirname, folder);
+        const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+        commandFiles.forEach(file => {
+            const filePath = path.join(commandsPath, file);
+            const command = require(filePath);
+            if ('data' in command && 'execute' in command) {
+                client.commands.set(command.data.name, command);
+            }
+        });
+    });
 }
 
-loadCommandsFromFolder('commands'); // carga carpeta commands
-loadCommandsFromFolder('api'); // carga carpeta api
+loadCommands();
 
 client.once('ready', () => {
     console.log(`Bot conectado como ${client.user.tag}`);
@@ -31,16 +34,14 @@ client.once('ready', () => {
 
 client.on('interactionCreate', async interaction => {
     if (!interaction.isCommand()) return;
-
     const command = client.commands.get(interaction.commandName);
-
     if (!command) return;
-
     try {
         await command.execute(interaction);
     } catch (error) {
-        console.error(error);
-        await interaction.reply({ content: 'Hubo un error al ejecutar este comando.', ephemeral: true });
+        console.error(`Error ejecutando ${interaction.commandName}:`, error);
+        const content = 'Hubo un error al ejecutar este comando.';
+        await interaction.reply({ content, ephemeral: true }).catch(() => {});
     }
 });
 

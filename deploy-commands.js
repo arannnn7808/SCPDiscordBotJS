@@ -5,34 +5,29 @@ const { REST, Routes } = require('discord.js');
 
 const commands = [];
 
-// Función para cargar comandos desde una carpeta
-function loadCommandsFromFolder(folder) {
-    const commandsPath = path.join(__dirname, folder);
-    const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
-
-    for (const file of commandFiles) {
-        const filePath = path.join(commandsPath, file);
-        const command = require(filePath);
-        commands.push(command.data.toJSON());
-    }
+function loadCommands() {
+    ['commands', 'api'].forEach(folder => {
+        const commandsPath = path.join(__dirname, folder);
+        const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+        commandFiles.forEach(file => {
+            const command = require(path.join(commandsPath, file));
+            if ('data' in command) {
+                commands.push(command.data.toJSON());
+            }
+        });
+    });
 }
 
-loadCommandsFromFolder('commands'); // carga la carpeta commands
-loadCommandsFromFolder('api'); // carga la carpeta api
+loadCommands();
 
 const rest = new REST({ version: '10' }).setToken(process.env.BOT_TOKEN);
 
 (async () => {
     try {
-        console.log('Se estan refrescando los comandos (/).');
-
-        await rest.put(
-            Routes.applicationCommands(process.env.CLIENT_ID),
-            { body: commands },
-        );
-
-        console.log('Se han refrescado los comandos (/).');
+        console.log('Refrescando comandos (/).');
+        await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
+        console.log('Comandos (/) refrescados exitosamente.');
     } catch (error) {
-        console.error(error);
+        console.error('Error al refrescar comandos:', error);
     }
 })();

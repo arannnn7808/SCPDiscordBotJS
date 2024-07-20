@@ -6,39 +6,63 @@ module.exports = {
         .setName('server')
         .setDescription('Muestra el estado del servidor y los jugadores activos.'),
     async execute(interaction) {
-        const serveridapi = process.env.SERVER_ID_API;
-        const proxyUrl = 'https://api.allorigins.win/raw?url=';
-        const targetUrl = `https://api.scplist.kr/api/servers/${serveridapi}`;
+        await interaction.deferReply();
 
         try {
-            // Usar import() dinámico para cargar node-fetch
-            const fetch = (await import('node-fetch')).default;
-            
-            const response = await fetch(proxyUrl + encodeURIComponent(targetUrl));
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const data = await response.json();
-            const estado = data.online ? 'Activo' : 'Inactivo';
-            const friendlyfire = data.friendlyFire ? 'Activado' : 'Desactivado';
-
-            // Crear un nuevo embed
-            const embed = new EmbedBuilder()
-                .setColor('#0099ff')
-                .setThumbnail(process.env.LINK_IMAGE_SERVER)
-                .setTitle('Estado del Servidor')
-                .setDescription(process.env.SERVER_NAME_SCPSL)
-                .addFields(
-                    { name: 'Jugadores', value: data.players, inline: true },
-                    { name: 'Versión', value: data.version, inline: true },
-                    { name: 'Fuego Amigo', value: friendlyfire, inline: true },
-                    { name: 'Estado', value: estado, inline: true },
-                )
-                .setTimestamp();
-
-            await interaction.reply({ embeds: [embed] });
+            const data = await fetchServerData();
+            const embed = createServerEmbed(data);
+            await interaction.editReply({ embeds: [embed] });
         } catch (error) {
-            await interaction.reply(`Error al cargar los datos del servidor: ${error.message}`);
+            console.error('Error fetching server data:', error);
+            await handleFetchError(interaction, error);
         }
     },
 };
+
+async function fetchServerData() {
+    const serveridapi = process.env.SERVER_ID_API;
+    const proxyUrl = 'https://api.allorigins.win/raw?url=';
+    const targetUrl = `https://api.scplist.kr/api/servers/${serveridapi}`;
+
+    const fetch = (await import('node-fetch')).default;
+    const response = await fetch(proxyUrl + encodeURIComponent(targetUrl));
+
+    if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response.json();
+}
+
+function createServerEmbed(data) {
+    const estado = data.online ? '🟢 Activo' : '🔴 Inactivo';
+    const friendlyfire = data.friendlyFire ? '✅ Activado' : '❌ Desactivado';
+
+    return new EmbedBuilder()
+        .setColor(data.online ? '#00FF00' : '#FF0000')
+        .setThumbnail(process.env.LINK_IMAGE_SERVER)
+        .setTitle('Estado del Servidor')
+        .setDescription(process.env.SERVER_NAME_SCPSL)
+        .addFields(
+            { name: 'Estado', value: estado, inline: true },
+            { name: 'Jugadores', value: data.players.toString(), inline: true },
+            { name: 'Versión', value: data.version, inline: true },
+            { name: 'Fuego Amigo', value: friendlyfire, inline: true }
+        )
+        .setFooter({ text: `IP: ${data.ip}:${data.port}` })
+        .setTimestamp();
+}
+
+async function handleFetchError(interaction, error) {
+    const errorEmbed = new EmbedBuilder()
+        .setColor('#FF0000')
+        .setTitle('Error al obtener datos del servidor')
+        .setDescription('No se pudo obtener la información del servidor en este momento.')
+        .addFields(
+            { name: 'Razón', value: error.message || 'Error desconocido' },
+            { name: 'Qué hacer', value: 'Por favor, intenta de nuevo más tarde o contacta a un administrador si el problema persiste.' }
+        )
+        .setTimestamp();
+
+    await interaction.editReply({ embeds: [errorEmbed] });
+}
