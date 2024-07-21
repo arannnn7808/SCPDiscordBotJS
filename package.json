@@ -19,11 +19,6 @@
     "dotenv": "^16.4.5",
     "ffmpeg-static": "^5.2.0",
     "franc": "^6.2.0",
-    "node-fetch": "^3.0.0",
-    "play-dl": "^1.9.7",
-    "soundcloud-downloader": "^1.0.0",
-    "spotify-web-api-node": "^5.0.2",
-    "yt-search": "^2.11.1",
-    "ytdl-core": "^4.11.5"
+    "node-fetch": "^3.0.0"
   }
 }
