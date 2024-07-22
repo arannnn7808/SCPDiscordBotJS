@@ -73,7 +73,7 @@ module.exports = {
             const errorEmbed = new EmbedBuilder()
                 .setColor('#FF0000')
                 .setTitle('Error de Traducción')
-                .setDescription('Hubo un error al procesar la traducción. Por favor, inténtalo de nuevo más tarde.');
+                .setDescription('Hubo un error al procesar la traducción. Por favor, contacte con el administrador del bot si el problema persiste.');
 
             try {
                 if (interactionHandled) {
