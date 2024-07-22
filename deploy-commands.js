@@ -2,16 +2,18 @@ require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const { REST, Routes } = require('discord.js');
+const { COMMAND_FOLDERS } = require('./config/constants');
 
 const commands = [];
 
 function loadCommands() {
-    ['commands', 'api'].forEach(folder => {
-        const commandsPath = path.join(__dirname, folder);
+    COMMAND_FOLDERS.forEach(folder => {
+        const commandsPath = path.join(__dirname, 'commands', folder);
         const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
         commandFiles.forEach(file => {
-            const command = require(path.join(commandsPath, file));
-            if ('data' in command) {
+            const filePath = path.join(commandsPath, file);
+            const command = require(filePath);
+            if ('data' in command && 'execute' in command) {
                 commands.push(command.data.toJSON());
             }
         });
