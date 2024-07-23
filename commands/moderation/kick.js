@@ -1,93 +1,110 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
-const { createSuccessEmbed, createErrorEmbed } = require('../../utils/embedBuilder');
-const { handleCommandError } = require('../../utils/errorHandler');
-const { checkPermission } = require('../../utils/permissionCheck');
-const logger = require('../../utils/logger');
+const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
+const {
+  createErrorEmbed,
+  createSuccessEmbed,
+} = require("../../utils/embedBuilder");
+const { handleCommandError } = require("../../utils/errorHandler");
+const logger = require("../../utils/logger");
 
 module.exports = {
-    data: new SlashCommandBuilder()
-        .setName('kick')
-        .setDescription('Expulsa a un usuario del servidor')
-        .addUserOption((option) =>
-            option.setName('usuario').setDescription('Usuario que deseas expulsar').setRequired(true)
-        )
-        .addStringOption((option) =>
-            option.setName('razon').setDescription('Razón de la expulsión').setRequired(false)
-        )
-        .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers),
-    cooldown: 10, // 10 seconds cooldown
-    async execute(interaction) {
-        try {
-            if (!(await checkPermission(interaction, PermissionFlagsBits.KickMembers))) {
-                return;
-            }
+  data: new SlashCommandBuilder()
+    .setName("kick")
+    .setDescription("Expulsa a un usuario del servidor")
+    .addUserOption((option) =>
+      option
+        .setName("usuario")
+        .setDescription("Usuario que deseas expulsar")
+        .setRequired(true),
+    )
+    .addStringOption((option) =>
+      option
+        .setName("razon")
+        .setDescription("Razón de la expulsión")
+        .setRequired(false),
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers),
+  cooldown: 10,
+  async execute(interaction) {
+    await interaction.deferReply({ ephemeral: true });
+    try {
+      // Input validation
+      const targetUser = interaction.options.getMember("usuario");
+      if (!targetUser) {
+        return await interaction.editReply({
+          embeds: [
+            createErrorEmbed(
+              "Error",
+              "El usuario especificado no está en el servidor.",
+            ),
+          ],
+          ephemeral: true,
+        });
+      }
 
-            const targetUser = interaction.options.getMember('usuario');
-            if (!targetUser) {
-                const errorEmbed = createErrorEmbed('Error', 'El usuario especificado no está en el servidor.');
-                return await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
-            }
+      if (targetUser.id === interaction.user.id) {
+        return await interaction.editReply({
+          embeds: [
+            createErrorEmbed("Error", "No puedes expulsarte a ti mismo."),
+          ],
+          ephemeral: true,
+        });
+      }
 
-            const reason = interaction.options.getString('razon') || 'No se proporcionó razón';
+      if (targetUser.id === interaction.client.user.id) {
+        return await interaction.editReply({
+          embeds: [
+            createErrorEmbed("Error", "No puedo expulsarme a mí mismo."),
+          ],
+          ephemeral: true,
+        });
+      }
 
-            if (!interaction.guild.members.me.permissions.has(PermissionFlagsBits.KickMembers)) {
-                await this.handleLackOfBotPermission(interaction);
-                return;
-            }
+      if (
+        targetUser.roles.highest.position >=
+        interaction.member.roles.highest.position
+      ) {
+        return await interaction.editReply({
+          embeds: [
+            createErrorEmbed(
+              "Error",
+              "No puedes expulsar a un usuario con un rol igual o superior al tuyo.",
+            ),
+          ],
+          ephemeral: true,
+        });
+      }
 
-            if (!targetUser.kickable) {
-                await this.handleUnkickableUser(interaction, targetUser);
-                return;
-            }
+      const reason =
+        interaction.options.getString("razon") || "No se proporcionó razón";
+      if (reason.length > 512) {
+        return await interaction.editReply({
+          embeds: [
+            createErrorEmbed(
+              "Error",
+              "La razón de la expulsión no puede exceder los 512 caracteres.",
+            ),
+          ],
+          ephemeral: true,
+        });
+      }
 
-            await this.performKick(interaction, targetUser, reason);
-        } catch (error) {
-            logger.error('Error executing kick command', error, {
-                command: 'kick',
-                user: interaction.user.tag,
-                guild: interaction.guild.name,
-            });
-            await handleCommandError(interaction, error);
-        }
-    },
+      // Perform kick
+      await targetUser.kick(reason);
+      logger.info(
+        `User ${targetUser.user.tag} was kicked by ${interaction.user.tag} for reason: ${reason}`,
+      );
 
-    async handleLackOfBotPermission(interaction) {
-        logger.warn(`Bot lacks kick permission in guild ${interaction.guild.name}`);
-        const errorEmbed = createErrorEmbed(
-            'Error de Permisos',
-            'No tengo permiso para expulsar miembros. Por favor, revisa mis permisos en el servidor.'
-        );
-        await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
-    },
-
-    async handleUnkickableUser(interaction, targetUser) {
-        logger.warn(`Attempted to kick user ${targetUser.user.tag} who is not kickable`);
-        const errorEmbed = createErrorEmbed(
-            'Usuario No Expulsable',
-            'No puedo expulsar a este usuario. Su rol puede ser más alto que el mío.'
-        );
-        await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
-    },
-
-    async performKick(interaction, targetUser, reason) {
-        try {
-            await targetUser.kick(reason);
-            logger.info(`User ${targetUser.user.tag} was kicked by ${interaction.user.tag} for reason: ${reason}`);
-            const successEmbed = createSuccessEmbed(
-                'Usuario Expulsado',
-                `Usuario ${targetUser.user.tag} expulsado correctamente.\nRazón: ${reason}`
-            );
-            if (!interaction.replied && !interaction.deferred) {
-                await interaction.reply({ embeds: [successEmbed], ephemeral: true });
-            }
-        } catch (error) {
-            logger.error('Error kicking user', error, {
-                command: 'kick',
-                user: interaction.user.tag,
-                target: targetUser.user.tag,
-                guild: interaction.guild.name,
-            });
-            await handleCommandError(interaction, error);
-        }
-    },
+      const successEmbed = createSuccessEmbed(
+        "Usuario Expulsado",
+        `Usuario ${targetUser.user.tag} expulsado correctamente.\nRazón: ${reason}`,
+      );
+      await interaction.editReply({ embeds: [successEmbed] });
+    } catch (error) {
+      logger.error("Error executing kick command", error);
+      await interaction.editReply({
+        content: "There was an error while executing this command!",
+        ephemeral: true,
+      });
+    }
+  },
 };
