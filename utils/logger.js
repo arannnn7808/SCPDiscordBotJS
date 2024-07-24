@@ -1,65 +1,73 @@
 const fs = require("fs");
 const path = require("path");
+const util = require("util");
 
-// Use path.resolve to ensure we're using the project root
-const projectRoot = path.resolve(__dirname, "..");
-const logDir = path.join(projectRoot, "logs");
+class Logger {
+  constructor() {
+    this.logDir = path.join(__dirname, "..", "logs");
+    if (!fs.existsSync(this.logDir)) {
+      fs.mkdirSync(this.logDir);
+    }
+  }
 
-// Create the logs directory if it doesn't exist
-if (!fs.existsSync(logDir)) {
-  fs.mkdirSync(logDir);
-}
+  _log(level, message, meta = {}) {
+    const timestamp = new Date().toISOString();
+    let logMessage = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
 
-function getTimestamp() {
-  return new Date().toISOString();
-}
+    if (Object.keys(meta).length > 0) {
+      const metaString = util
+        .inspect(meta, { depth: null, colors: false })
+        .replace(/\n/g, " ");
+      logMessage += ` ${metaString}`;
+    }
 
-function formatMessage(level, message, meta = {}) {
-  const timestamp = getTimestamp();
-  const metaString = Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : "";
-  return `[${timestamp}] [${level.toUpperCase()}] ${message}${metaString}\n`;
-}
+    const logFile = path.join(
+      this.logDir,
+      `${new Date().toISOString().split("T")[0]}.log`,
+    );
 
-function logToFile(level, message, meta = {}) {
-  const logFile = path.join(
-    logDir,
-    `${new Date().toISOString().split("T")[0]}.log`,
-  );
-  const logMessage = formatMessage(level, message, meta);
-  fs.appendFileSync(logFile, logMessage);
-}
+    console.log(logMessage);
+    fs.appendFileSync(logFile, logMessage + "\n");
+  }
 
-function log(level, message, meta = {}) {
-  console[level](formatMessage(level, message, meta));
-  logToFile(level, message, meta);
-}
+  info(message, meta = {}) {
+    this._log("INFO", message, meta);
+  }
 
-function info(message, meta = {}) {
-  log("info", message, meta);
-}
+  warn(message, meta = {}) {
+    this._log("WARN", message, meta);
+  }
 
-function warn(message, meta = {}) {
-  log("warn", message, meta);
-}
+  error(message, error, meta = {}) {
+    const errorMeta = {
+      ...meta,
+      errorMessage: error.message,
+      stack: error.stack,
+    };
+    this._log("ERROR", message, errorMeta);
+  }
 
-function error(message, error, meta = {}) {
-  const errorMeta = {
-    ...meta,
-    errorMessage: error && error.message ? error.message : "Unknown error",
-    stack: error && error.stack ? error.stack : "No stack trace available",
-  };
-  log("error", message, errorMeta);
-}
+  debug(message, meta = {}) {
+    if (process.env.DEBUG === "true") {
+      this._log("DEBUG", message, meta);
+    }
+  }
 
-function debug(message, meta = {}) {
-  if (process.env.DEBUG === "true") {
-    log("debug", message, meta);
+  command(commandName, user, guild, meta = {}) {
+    this._log(
+      "INFO",
+      `Command '${commandName}' executed by ${user.tag} in guild '${guild?.name || "DM"}'`,
+      meta,
+    );
+  }
+
+  interaction(type, user, guild, meta = {}) {
+    this._log(
+      "INFO",
+      `${type} interaction by ${user.tag} in guild '${guild?.name || "DM"}'`,
+      meta,
+    );
   }
 }
 
-module.exports = {
-  info,
-  warn,
-  error,
-  debug,
-};
+module.exports = new Logger();

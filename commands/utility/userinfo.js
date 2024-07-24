@@ -1,15 +1,17 @@
-const {
-  SlashCommandBuilder,
-  EmbedBuilder,
-  PermissionFlagsBits,
-} = require("discord.js");
-const { handleCommandError } = require("../../utils/errorHandler");
+const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
+const CustomEmbedBuilder = require("../../utils/embedBuilder");
+const ErrorHandler = require("../../utils/errorHandler");
 const logger = require("../../utils/logger");
 
-/**
- * Command to display information about a user.
- * @module UserInfoCommand
- */
+class CommandError extends Error {
+  constructor(code, message, level = "error") {
+    super(message);
+    this.name = "CommandError";
+    this.code = code;
+    this.level = level;
+  }
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("userinfo")
@@ -19,78 +21,61 @@ module.exports = {
         .setName("usuario")
         .setDescription("El usuario del que quieres obtener información"),
     )
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    .setDefaultMemberPermissions(PermissionFlagsBits.SendMessages),
+  folder: "utility",
+  permissions: ["SendMessages"],
   cooldown: 5,
 
-  /**
-   * Executes the userinfo command.
-   * @async
-   * @param {import('discord.js').CommandInteraction} interaction - The interaction that triggered the command.
-   * @returns {Promise<void>}
-   */
   async execute(interaction) {
-    await interaction.deferReply();
     try {
       const targetUser =
         interaction.options.getUser("usuario") || interaction.user;
       const member = await interaction.guild.members.fetch(targetUser.id);
 
       if (!member) {
-        throw new Error("USUARIO_NO_ENCONTRADO");
+        throw new CommandError(
+          "USER_NOT_FOUND",
+          "El usuario especificado no está en el servidor.",
+        );
       }
 
       const embed = await this.createUserInfoEmbed(member, interaction);
       await interaction.editReply({ embeds: [embed] });
-      logger.info("Userinfo command executed successfully", {
-        user: interaction.user.tag,
+      logger.info(`Userinfo command executed for ${targetUser.tag}`, {
+        executor: interaction.user.tag,
+        guildId: interaction.guild.id,
       });
     } catch (error) {
-      logger.error("Error executing userinfo command", error);
-      await interaction.editReply({
-        content: "There was an error while executing this command!",
-        ephemeral: true,
-      });
+      await ErrorHandler.handle(error, interaction);
     }
   },
 
-  /**
-   * Creates an embed with user information.
-   * @async
-   * @param {import('discord.js').GuildMember} member - The guild member to get information about.
-   * @param {import('discord.js').CommandInteraction} interaction - The interaction that triggered the command.
-   * @returns {Promise<import('discord.js').EmbedBuilder>} The created embed.
-   */
-  async createUserInfoEmbed(member, interaction) {
+  createUserInfoEmbed(member, interaction) {
     const roles = member.roles.cache
       .sort((a, b) => b.position - a.position)
       .map((role) => role.toString())
       .slice(0, -1);
 
-    return new EmbedBuilder()
+    return new CustomEmbedBuilder()
       .setTitle(`Información de Usuario: ${member.user.tag}`)
       .setThumbnail(member.user.displayAvatarURL({ dynamic: true, size: 256 }))
       .setColor(member.displayHexColor || "#00FF00")
-      .addFields(
-        { name: "ID", value: member.user.id, inline: true },
-        { name: "Apodo", value: member.nickname || "Ninguno", inline: true },
-        {
-          name: "Cuenta Creada",
-          value: `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`,
-          inline: true,
-        },
-        {
-          name: "Se Unió al Servidor",
-          value: `<t:${Math.floor(member.joinedTimestamp / 1000)}:R>`,
-          inline: true,
-        },
-        { name: "Roles", value: roles.length ? roles.join(", ") : "Ninguno" },
-        {
-          name: "Es un Bot",
-          value: member.user.bot ? "Sí" : "No",
-          inline: true,
-        },
+      .addField("ID", member.user.id, true)
+      .addField("Apodo", member.nickname || "Ninguno", true)
+      .addField(
+        "Cuenta Creada",
+        `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`,
+        true,
       )
+      .addField(
+        "Se Unió al Servidor",
+        `<t:${Math.floor(member.joinedTimestamp / 1000)}:R>`,
+        true,
+      )
+      .addField("Roles", roles.length ? roles.join(", ") : "Ninguno")
+      .addField("Es un Bot", member.user.bot ? "Sí" : "No", true)
       .setFooter({ text: `Solicitado por ${interaction.user.tag}` })
-      .setTimestamp();
+      .setTimestamp()
+      .build();
   },
 };

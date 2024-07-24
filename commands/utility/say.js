@@ -5,11 +5,18 @@ const {
   ButtonBuilder,
   ButtonStyle,
 } = require("discord.js");
-const {
-  createErrorEmbed,
-  createSuccessEmbed,
-} = require("../../utils/embedBuilder");
+const CustomEmbedBuilder = require("../../utils/embedBuilder");
 const logger = require("../../utils/logger");
+const ErrorHandler = require("../../utils/errorHandler");
+
+class CommandError extends Error {
+  constructor(code, message, level = "error") {
+    super(message);
+    this.name = "CommandError";
+    this.code = code;
+    this.level = level;
+  }
+}
 
 function sanitizeMessage(message) {
   message = message.replace(/@/g, "@\u200b");
@@ -38,35 +45,28 @@ module.exports = {
         .setMaxLength(2000),
     )
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
+  folder: "utility",
+  permissions: ["ManageMessages"],
   cooldown: 5,
   async execute(interaction) {
     try {
-      if (!interaction.deferred && !interaction.replied) {
-        await interaction.deferReply({ ephemeral: true });
-      }
-
       if (
         !interaction.member.permissions.has(PermissionFlagsBits.ManageMessages)
       ) {
-        logger.warn(
-          `User ${interaction.user.tag} attempted to use 'say' command without permissions`,
-        );
-        const errorEmbed = createErrorEmbed(
-          "Error de Permisos",
+        throw new CommandError(
+          "MISSING_PERMISSIONS",
           "No tienes permisos para usar este comando.",
         );
-        return await interaction.editReply({ embeds: [errorEmbed] });
       }
 
       const message = interaction.options.getString("mensaje");
       const sanitizedMessage = sanitizeMessage(message);
 
       if (sanitizedMessage.trim().length === 0) {
-        const errorEmbed = createErrorEmbed(
-          "Error",
+        throw new CommandError(
+          "EMPTY_MESSAGE",
           "El mensaje no puede estar vacío después de la sanitización.",
         );
-        return await interaction.editReply({ embeds: [errorEmbed] });
       }
 
       const row = new ActionRowBuilder().addComponents(
@@ -83,12 +83,14 @@ module.exports = {
 
       logger.info(
         `'Say' command executed: message sent by ${interaction.user.tag} in #${interaction.channel.name}`,
+        { guildId: interaction.guild.id },
       );
 
-      const successEmbed = createSuccessEmbed(
-        "Mensaje Enviado",
-        "El mensaje ha sido enviado exitosamente.",
-      );
+      const successEmbed = new CustomEmbedBuilder()
+        .setTitle("Mensaje Enviado")
+        .setDescription("El mensaje ha sido enviado exitosamente.")
+        .setColor("#00FF00")
+        .build();
       await interaction.editReply({ embeds: [successEmbed] });
 
       const collector = sentMessage.createMessageComponentCollector({
@@ -105,6 +107,7 @@ module.exports = {
             });
             logger.info(
               `Sender revealed to ${i.user.tag} for message from ${interaction.user.tag}`,
+              { guildId: interaction.guild.id },
             );
           } catch (error) {
             logger.error(`Error revealing sender to ${i.user.tag}:`, error);
@@ -118,19 +121,7 @@ module.exports = {
         });
       });
     } catch (error) {
-      logger.error(
-        `Error executing 'say' command for ${interaction.user.tag}:`,
-        error,
-      );
-      const errorEmbed = createErrorEmbed(
-        "Error",
-        "Hubo un error al enviar el mensaje. Por favor, inténtalo de nuevo más tarde.",
-      );
-      if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
-      } else {
-        await interaction.editReply({ embeds: [errorEmbed] });
-      }
+      await ErrorHandler.handle(error, interaction);
     }
   },
 };

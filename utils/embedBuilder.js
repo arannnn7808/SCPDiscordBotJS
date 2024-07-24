@@ -1,76 +1,116 @@
 const { EmbedBuilder } = require("discord.js");
-const {
-  DEFAULT_COLOR,
-  ERROR_COLOR,
-  SUCCESS_COLOR,
-} = require("../config/constants");
 
-function createBasicEmbed(title, description, options = {}) {
-  const embed = new EmbedBuilder()
-    .setColor(options.color || DEFAULT_COLOR)
-    .setTitle(title)
-    .setDescription(description)
-    .setTimestamp();
-
-  if (options.fields) {
-    embed.addFields(options.fields);
+class CustomEmbedBuilder {
+  constructor(options = {}) {
+    this.embed = new EmbedBuilder();
+    this.setDefaults(options);
   }
 
-  if (options.footer) {
-    embed.setFooter(options.footer);
+  setDefaults(options) {
+    const {
+      color = "#0099ff",
+      footer = { text: "Bot de Ayuda" },
+      timestamp = true,
+    } = options;
+
+    this.setColor(color);
+    this.setFooter(footer);
+    if (timestamp) this.setTimestamp();
+
+    return this;
   }
 
-  if (options.thumbnail) {
-    embed.setThumbnail(options.thumbnail);
+  setTitle(title) {
+    if (title) this.embed.setTitle(title);
+    return this;
   }
 
-  if (options.image) {
-    embed.setImage(options.image);
+  setDescription(description) {
+    if (description) {
+      const safeDescription = String(description).slice(0, 4096);
+      this.embed.setDescription(safeDescription);
+    }
+    return this;
   }
 
-  if (options.author) {
-    embed.setAuthor(options.author);
+  addField(name, value, inline = false) {
+    if (name && value) {
+      this.embed.addFields({
+        name: String(name),
+        value: String(value),
+        inline,
+      });
+    }
+    return this;
   }
 
-  return embed;
+  setThumbnail(url) {
+    if (url) this.embed.setThumbnail(url);
+    return this;
+  }
+
+  setImage(url) {
+    if (url) this.embed.setImage(url);
+    return this;
+  }
+
+  setAuthor(options) {
+    if (options) this.embed.setAuthor(options);
+    return this;
+  }
+
+  setFooter(options) {
+    if (options) {
+      if (typeof options === "string") {
+        this.embed.setFooter({ text: options });
+      } else {
+        this.embed.setFooter(options);
+      }
+    }
+    return this;
+  }
+
+  setTimestamp(timestamp = Date.now()) {
+    this.embed.setTimestamp(timestamp);
+    return this;
+  }
+
+  setColor(color) {
+    if (color) this.embed.setColor(color);
+    return this;
+  }
+
+  setURL(url) {
+    if (url) this.embed.setURL(url);
+    return this;
+  }
+
+  build() {
+    return this.embed;
+  }
+
+  static quick(title, description, color = "#0099ff") {
+    return new CustomEmbedBuilder({ color })
+      .setTitle(title)
+      .setDescription(description)
+      .build();
+  }
+
+  static error(title, description) {
+    return this.quick(title, description, "#ff0000");
+  }
+
+  static success(title, description) {
+    return this.quick(title, description, "#00ff00");
+  }
+
+  static warning(title, description) {
+    return this.quick(title, description, "#ffff00");
+  }
+
+  static info(title, description) {
+    return this.quick(title, description, "#0099ff");
+  }
 }
 
-function createErrorEmbed(title, description, options = {}) {
-  return createBasicEmbed(title, description, {
-    ...options,
-    color: ERROR_COLOR,
-  });
-}
-
-function createSuccessEmbed(title, description, options = {}) {
-  return createBasicEmbed(title, description, {
-    ...options,
-    color: SUCCESS_COLOR,
-  });
-}
-
-function createCommandHelpEmbed(command) {
-  return createBasicEmbed(
-    `Ayuda: /${command.data.name}`,
-    command.data.description,
-    {
-      fields: [
-        {
-          name: "Uso",
-          value: `/${command.data.name} ${command.data.options.map((opt) => `[${opt.name}]`).join(" ")}`,
-        },
-        {
-          name: "Cooldown",
-          value: `${command.cooldown || 3} segundos`,
-        },
-      ],
-    },
-  );
-}
-
-module.exports = {
-  createBasicEmbed,
-  createErrorEmbed,
-  createSuccessEmbed,
-  createCommandHelpEmbed,
-};
+module.exports = CustomEmbedBuilder;

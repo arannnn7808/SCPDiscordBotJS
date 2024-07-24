@@ -1,8 +1,18 @@
-const { SlashCommandBuilder } = require("@discordjs/builders");
-const { EmbedBuilder } = require("discord.js");
+const { SlashCommandBuilder } = require("discord.js");
 const { translate } = require("@vitalets/google-translate-api");
 const { banderas } = require("../../config/constants");
 const logger = require("../../utils/logger");
+const CustomEmbedBuilder = require("../../utils/embedBuilder");
+const ErrorHandler = require("../../utils/errorHandler");
+
+class CommandError extends Error {
+  constructor(code, message, level = "error") {
+    super(message);
+    this.name = "CommandError";
+    this.code = code;
+    this.level = level;
+  }
+}
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -32,69 +42,52 @@ module.exports = {
           { name: "🇰🇷 한국어", value: "ko" },
         ),
     ),
+  folder: "utility",
   cooldown: 5,
   async execute(interaction) {
     try {
-      if (!interaction.deferred && !interaction.replied) {
-        await interaction.deferReply();
-      }
-
       const textoATraducir = interaction.options.getString("texto");
       const idiomaDestino = interaction.options.getString("idioma");
 
+      logger.info("Starting translation", {
+        user: interaction.user.tag,
+        sourceText: textoATraducir,
+        targetLanguage: idiomaDestino,
+      });
+
       const resultado = await translate(textoATraducir, { to: idiomaDestino });
 
-      const { franc } = await import("franc");
-      const idiomaOrigen = franc(textoATraducir);
-
-      const banderaOrigen = banderas[idiomaOrigen] || "🏳️";
+      const idiomaDetectado = resultado.raw.src;
       const banderaDestino = banderas[idiomaDestino] || "🏳️";
 
-      const embed = new EmbedBuilder()
-        .setColor("#0099ff")
+      const embed = new CustomEmbedBuilder()
         .setTitle("🌐 Traducción")
-        .addFields(
-          {
-            name: "📝 Texto original",
-            value: `${banderaOrigen} ${textoATraducir}`,
-          },
-          {
-            name: "🔄 Traducción",
-            value: `${banderaDestino} ${resultado.text}`,
-          },
-          {
-            name: "🌍 Idiomas",
-            value: `De: ${banderaOrigen} ${idiomaOrigen} → A: ${banderaDestino} ${idiomaDestino}`,
-          },
-        )
-        .setFooter({ text: "Traducción realizada con éxito" });
+        .addField("📝 Texto original", textoATraducir)
+        .addField("🔄 Traducción", `${banderaDestino} ${resultado.text}`)
+        .addField("🌍 Idiomas", `De: ${idiomaDetectado} → A: ${idiomaDestino}`)
+        .setFooter({ text: "Traducción realizada con éxito" })
+        .build();
 
       await interaction.editReply({ embeds: [embed] });
-      logger.info("Translation performed", {
-        command: "translate",
+
+      logger.info("Translation completed successfully", {
         user: interaction.user.tag,
-        sourceLanguage: idiomaOrigen,
+        sourceLanguage: idiomaDetectado,
         targetLanguage: idiomaDestino,
       });
     } catch (error) {
-      logger.error("Error in translation command", error, {
-        command: "translate",
+      logger.error("Translation failed", {
+        error: error.message,
         user: interaction.user.tag,
-        targetLanguage: interaction.options.getString("idioma"),
       });
-
-      const errorEmbed = new EmbedBuilder()
-        .setColor("#FF0000")
-        .setTitle("Error de Traducción")
-        .setDescription(
-          "Hubo un error al procesar la traducción. Por favor, inténtalo de nuevo más tarde.",
-        );
-
-      if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
-      } else {
-        await interaction.editReply({ embeds: [errorEmbed] });
-      }
+      await ErrorHandler.handle(
+        new CommandError(
+          "TRANSLATION_FAILED",
+          "Ha ocurrido un error al intentar traducir el texto.",
+          "error",
+        ),
+        interaction,
+      );
     }
   },
 };

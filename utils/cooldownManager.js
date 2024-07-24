@@ -1,24 +1,17 @@
-const { Collection } = require("discord.js");
-const logger = require("./logger");
-
 class CooldownManager {
   constructor() {
-    this.cooldowns = new Collection();
+    this.cooldowns = new Map();
   }
 
   setCooldown(userId, commandName, duration) {
     const key = `${userId}-${commandName}`;
     const expirationTime = Date.now() + duration * 1000;
     this.cooldowns.set(key, expirationTime);
-    logger.debug(
-      `Cooldown set for user ${userId} on command ${commandName} for ${duration} seconds`,
-    );
   }
 
-  getCooldownRemaining(userId, commandName) {
+  getRemainingCooldown(userId, commandName) {
     const key = `${userId}-${commandName}`;
     const expirationTime = this.cooldowns.get(key);
-
     if (!expirationTime) return 0;
 
     const now = Date.now();
@@ -35,15 +28,15 @@ class CooldownManager {
   clearCooldown(userId, commandName) {
     const key = `${userId}-${commandName}`;
     this.cooldowns.delete(key);
-    logger.debug(
-      `Cooldown cleared for user ${userId} on command ${commandName}`,
-    );
   }
 
   clearExpiredCooldowns() {
     const now = Date.now();
-    this.cooldowns.sweep((expirationTime) => expirationTime <= now);
-    logger.debug("Expired cooldowns cleared");
+    for (const [key, expirationTime] of this.cooldowns.entries()) {
+      if (expirationTime <= now) {
+        this.cooldowns.delete(key);
+      }
+    }
   }
 }
 

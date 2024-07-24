@@ -1,9 +1,11 @@
 {
   "name": "enigmabot",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "bot.js",
   "type": "commonjs",
   "scripts": {
+    "start": "node bot.js",
+    "deploy": "node deployCommands.js",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\"",
     "test": "jest"
   },
@@ -22,8 +24,10 @@
     "dotenv": "^16.4.5",
     "ffmpeg-static": "^5.2.0",
     "franc": "^6.2.0",
+    "franc-min": "^6.2.0",
     "globals": "^15.8.0",
-    "node-fetch": "^3.0.0"
+    "node-cache": "^5.1.2",
+    "node-fetch": "^3.3.2"
   },
   "devDependencies": {
     "@babel/core": "^7.24.9",

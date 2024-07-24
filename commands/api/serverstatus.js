@@ -1,42 +1,44 @@
-const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
+const { SlashCommandBuilder } = require("discord.js");
 const config = require("../../config/botConfig");
 const logger = require("../../utils/logger");
+const CustomEmbedBuilder = require("../../utils/embedBuilder");
+const ErrorHandler = require("../../utils/errorHandler");
 const fetch = (...args) =>
   import("node-fetch").then(({ default: fetch }) => fetch(...args));
 
 const PROXY_URL = "https://api.allorigins.win/raw?url=";
 const CACHE_DURATION = 60000; // 1 minute cache
 const FALLBACK_DURATION = 300000; // 5 minutes fallback duration
-const FETCH_TIMEOUT = 2900; // 2.9 seconds timeout
+const FETCH_TIMEOUT = 5000; // 5 seconds timeout
 
 let cachedData = null;
 let lastFetchTime = 0;
 let isUsingFallback = false;
 
+class CommandError extends Error {
+  constructor(code, message, level = "error") {
+    super(message);
+    this.name = "CommandError";
+    this.code = code;
+    this.level = level;
+  }
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("servidor")
     .setDescription("Muestra el estado del servidor y los jugadores activos."),
+  folder: "api",
   cooldown: 30, // 30 seconds cooldown
 
   async execute(interaction) {
-    await interaction.deferReply();
-
     try {
-      const data = await Promise.race([
-        this.getServerData(),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Fetch timeout")), FETCH_TIMEOUT),
-        ),
-      ]);
-
+      const data = await this.getServerData();
       const embed = this.createServerEmbed(data);
       await interaction.editReply({ embeds: [embed] });
       logger.info(`Server status command executed by ${interaction.user.tag}`);
     } catch (error) {
-      logger.error("Error fetching server status", error);
-      const fallbackEmbed = this.createFallbackEmbed();
-      await interaction.editReply({ embeds: [fallbackEmbed] });
+      await ErrorHandler.handle(error, interaction);
     }
   },
 
@@ -57,16 +59,22 @@ module.exports = {
         lastFetchTime = now;
         isUsingFallback = false;
       } else {
-        throw new Error("Received null data from API");
+        throw new CommandError(
+          "NULL_DATA",
+          "Received null data from API",
+          "error",
+        );
       }
       return data;
     } catch (error) {
-      logger.error("Failed to fetch server data, using fallback", error);
-      if (!cachedData) {
-        throw new Error("No cached data available for fallback");
+      logger.error("Failed to fetch server data, using fallback", {
+        error: error.message,
+      });
+      if (cachedData) {
+        isUsingFallback = true;
+        return cachedData;
       }
-      isUsingFallback = true;
-      return cachedData;
+      throw new CommandError("NO_DATA", "No data available", "error");
     }
   },
 
@@ -76,18 +84,26 @@ module.exports = {
         const data = await this.fetchServerData();
         if (data) return data;
       } catch (error) {
-        logger.warn(`Fetch attempt ${i + 1} failed:`, error);
+        logger.warn(`Fetch attempt ${i + 1} failed:`, { error: error.message });
         if (i === retries - 1) throw error;
         await new Promise((resolve) => setTimeout(resolve, 500)); // Wait 0.5 second before retrying
       }
     }
-    throw new Error(`Failed to fetch data after ${retries} attempts`);
+    throw new CommandError(
+      "FETCH_FAILED",
+      `Failed to fetch data after ${retries} attempts`,
+      "error",
+    );
   },
 
   async fetchServerData() {
     const serverId = process.env.SERVER_ID_API;
     if (!serverId) {
-      throw new Error("SERVER_ID_API is not set in the environment variables");
+      throw new CommandError(
+        "MISSING_ENV",
+        "SERVER_ID_API is not set in the environment variables",
+        "error",
+      );
     }
 
     const targetUrl = encodeURIComponent(
@@ -95,22 +111,46 @@ module.exports = {
     );
     const proxyUrl = `${PROXY_URL}${targetUrl}`;
 
-    const response = await fetch(proxyUrl);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
 
-    const data = await response.json();
-    if (!data) {
-      throw new Error("Received null data from API");
+    try {
+      const response = await fetch(proxyUrl, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new CommandError(
+          "HTTP_ERROR",
+          `HTTP error! status: ${response.status}`,
+          "error",
+        );
+      }
+
+      const data = await response.json();
+      if (!data) {
+        throw new CommandError(
+          "NULL_DATA",
+          "Received null data from API",
+          "error",
+        );
+      }
+      this.validateServerData(data);
+      return data;
+    } catch (error) {
+      if (error.name === "AbortError") {
+        throw new CommandError("TIMEOUT", "Request timed out", "error");
+      }
+      throw error;
     }
-    this.validateServerData(data);
-    return data;
   },
 
   validateServerData(data) {
     if (!data || typeof data !== "object") {
-      throw new Error("Invalid server data received");
+      throw new CommandError(
+        "INVALID_DATA",
+        "Invalid server data received",
+        "error",
+      );
     }
 
     const requiredFields = [
@@ -124,59 +164,57 @@ module.exports = {
     ];
     for (const field of requiredFields) {
       if (!(field in data)) {
-        throw new Error(`Missing required field in server data: ${field}`);
+        throw new CommandError(
+          "MISSING_FIELD",
+          `Missing required field in server data: ${field}`,
+          "error",
+        );
       }
     }
+
+    // Set default values for optional fields
+    data.maxPlayers = data.maxPlayers || "N/A";
   },
 
   createServerEmbed(data) {
     const serverName = this.stripHtmlTags(
       data.info || "Server Name Not Available",
     );
-    const embed = new EmbedBuilder()
+    return new CustomEmbedBuilder()
       .setColor(
         data.online
           ? config.serverStatus.embedColor.online
           : config.serverStatus.embedColor.offline,
       )
-      .addFields(
-        { name: "Nombre", value: serverName, inline: false },
-        {
-          name: "Estado",
-          value: data.online
-            ? config.serverStatusTexts.online
-            : config.serverStatusTexts.offline,
-          inline: true,
-        },
-        { name: "Jugadores", value: data.players.toString(), inline: true },
-        { name: "Version", value: data.version, inline: true },
-        {
-          name: "Fuego Amigo",
-          value: data.friendlyFire
-            ? config.serverStatusTexts.friendlyFireEnabled
-            : config.serverStatusTexts.friendlyFireDisabled,
-          inline: true,
-        },
+      .setTitle("Estado del Servidor")
+      .addField("Nombre", serverName, false)
+      .addField(
+        "Estado",
+        data.online
+          ? config.serverStatusTexts.online
+          : config.serverStatusTexts.offline,
+        true,
+      )
+      .addField(
+        "Jugadores",
+        `${data.players}${data.maxPlayers !== "N/A" ? `/${data.maxPlayers}` : ""}`,
+        true,
+      )
+      .addField("Version", data.version, true)
+      .addField(
+        "Fuego Amigo",
+        data.friendlyFire
+          ? config.serverStatusTexts.friendlyFireEnabled
+          : config.serverStatusTexts.friendlyFireDisabled,
+        true,
       )
       .setFooter({
-        text: `IP: ${data.ip}:${data.port} | ${config.embeds.footerText}${isUsingFallback ? " | Datos en caché" : ""}`,
-      });
-
-    if (process.env.LINK_IMAGE_SERVER) {
-      embed.setThumbnail(process.env.LINK_IMAGE_SERVER);
-    }
-
-    return embed;
-  },
-
-  createFallbackEmbed() {
-    return new EmbedBuilder()
-      .setColor(config.serverStatus.embedColor.offline)
-      .setTitle("Estado del Servidor")
-      .setDescription(
-        "Lo sentimos, no se pudo obtener la información del servidor en este momento. Por favor, inténtalo de nuevo más tarde.",
-      )
-      .setFooter({ text: config.embeds.footerText });
+        text: `IP: ${data.ip}:${data.port} | ${
+          config.embeds.footerText
+        }${isUsingFallback ? " | Datos en caché" : ""}`,
+      })
+      .setThumbnail(process.env.LINK_IMAGE_SERVER)
+      .build();
   },
 
   stripHtmlTags(html) {
