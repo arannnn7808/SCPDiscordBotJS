@@ -1,39 +1,50 @@
 require("dotenv").config();
-const fs = require("fs");
+const fs = require("fs").promises;
 const path = require("path");
 const { REST, Routes } = require("discord.js");
 const { COMMAND_FOLDERS } = require("./config/constants");
+const logger = require("./utils/logger");
 
-const commands = [];
-
-function loadCommands() {
-  COMMAND_FOLDERS.forEach((folder) => {
+async function loadCommands() {
+  const commands = [];
+  for (const folder of COMMAND_FOLDERS) {
     const commandsPath = path.join(__dirname, "commands", folder);
-    const commandFiles = fs
-      .readdirSync(commandsPath)
-      .filter((file) => file.endsWith(".js"));
-    commandFiles.forEach((file) => {
-      const filePath = path.join(commandsPath, file);
-      const command = require(filePath);
-      if ("data" in command && "execute" in command) {
-        commands.push(command.data.toJSON());
+    const commandFiles = await fs.readdir(commandsPath);
+    await Promise.all(commandFiles.map(async (file) => {
+      if (file.endsWith(".js")) {
+        const filePath = path.join(commandsPath, file);
+        const command = require(filePath);
+        if ("data" in command && "execute" in command) {
+          commands.push(command.data.toJSON());
+          logger.info(`Loaded command for deployment: ${command.data.name}`);
+        } else {
+          logger.warn(`Invalid command file for deployment: ${filePath}`);
+        }
       }
-    });
-  });
+    }));
+  }
+  return commands;
 }
 
-loadCommands();
-
-const rest = new REST({ version: "10" }).setToken(process.env.BOT_TOKEN);
-
-(async () => {
+async function deployCommands() {
   try {
-    console.log("Refrescando comandos (/).");
-    await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), {
-      body: commands,
-    });
-    console.log("Comandos (/) refrescados exitosamente.");
+    logger.info("Starting command deployment...");
+
+    const commands = await loadCommands();
+    logger.info(`Loaded ${commands.length} commands for deployment`);
+
+    const rest = new REST({ version: "10" }).setToken(process.env.BOT_TOKEN);
+
+    logger.info("Refreshing application (/) commands...");
+    const data = await rest.put(
+        Routes.applicationCommands(process.env.CLIENT_ID),
+        { body: commands }
+    );
+
+    logger.info(`Successfully reloaded ${data.length} application (/) commands.`);
   } catch (error) {
-    console.error("Error al refrescar comandos:", error);
+    logger.error("Error deploying commands:", error);
   }
-})();
+}
+
+deployCommands();
