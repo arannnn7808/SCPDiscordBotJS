@@ -46,7 +46,9 @@ module.exports = {
   cooldown: 5,
   async execute(interaction) {
     try {
+      const { franc } = await import('franc');
       const textoATraducir = interaction.options.getString("texto");
+      const idiomaOrigen = franc(textoATraducir);
       const idiomaDestino = interaction.options.getString("idioma");
 
       logger.info("Starting translation", {
@@ -58,13 +60,14 @@ module.exports = {
       const resultado = await translate(textoATraducir, { to: idiomaDestino });
 
       const idiomaDetectado = resultado.raw.src;
-      const banderaDestino = banderas[idiomaDestino] || "🏳️";
+      const banderaOrigen = banderas[idiomaOrigen] || "🏳️";
+      const banderaDestino = banderas[idiomaDestino] || '🏳️';
 
       const embed = new CustomEmbedBuilder()
         .setTitle("🌐 Traducción")
         .addField("📝 Texto original", textoATraducir)
         .addField("🔄 Traducción", `${banderaDestino} ${resultado.text}`)
-        .addField("🌍 Idiomas", `De: ${idiomaDetectado} → A: ${idiomaDestino}`)
+        .addField("🌍 Idiomas", `De: (${banderaOrigen}) ${idiomaDetectado} → A: (${banderaDestino}) ${idiomaDestino}`)
         .setFooter({ text: "Traducción realizada con éxito" })
         .build();
 
