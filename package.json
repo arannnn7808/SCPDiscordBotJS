@@ -1,12 +1,12 @@
 {
-  "name": "enigmabot",
+  "name": "scpdiscordbot",
   "version": "1.0.0",
   "main": "bot.js",
   "type": "commonjs",
   "scripts": {
     "start": "node bot.js",
     "deploy": "node deployCommands.js",
-    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\"",
+    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\""
   },
   "keywords": [],
   "author": "",
