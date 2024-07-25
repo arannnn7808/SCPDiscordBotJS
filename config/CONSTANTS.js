@@ -2,7 +2,7 @@ module.exports = {
   DEFAULT_COLOR: "#0099ff",
   ERROR_COLOR: "#FF0000",
   SUCCESS_COLOR: "#00FF00",
-  COMMAND_FOLDERS: ["moderacion", "utility", "api"],
+  COMMAND_FOLDERS: ["moderation", "utility", "api"],
   DEFAULT_COOLDOWN: 3, // Default cooldown in seconds
   COMMAND_COOLDOWNS: {
     ban: 10,
