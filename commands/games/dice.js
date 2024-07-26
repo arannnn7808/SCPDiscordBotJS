@@ -21,8 +21,8 @@ module.exports = {
     folder: "games",
     cooldown: 3,
     permissions: ["SendMessages"],
-    
-    async execute(interaction) {   
+
+    async execute(interaction) {
         try {
             const roll = Math.floor(Math.random() * 6) + 1;
             const imagePath = path.join(__dirname, '..', '..', 'images', 'dices', `${roll}.png`);
@@ -45,28 +45,20 @@ module.exports = {
                 .setThumbnail(`attachment://${roll}.png`)
                 .build();
 
-            await interaction.editReply({ embeds: [embed], files: [attachment] });
-
             logger.info("Dice roll command executed", {
                 user: interaction.user.tag,
                 guild: interaction.guild?.name,
                 result: roll
             });
+
+            return [{ embeds: [embed], files: [attachment] }];
         } catch (error) {
-            if (error instanceof CommandError) {
-                logger.error(`Dice command error: ${error.message}`, {
-                    code: error.code,
-                    level: error.level,
-                    user: interaction.user.tag,
-                    guild: interaction.guild?.name
-                });
-            } else {
-                logger.error(`Unexpected error in dice command: ${error.message}`, {
-                    error,
-                    user: interaction.user.tag,
-                    guild: interaction.guild?.name
-                });
-            }
+            logger.error("Error in dice command", {
+                error: error.message,
+                stack: error.stack,
+                user: interaction.user.tag,
+                guild: interaction.guild?.name
+            });
             await ErrorHandler.handle(error, interaction);
         }
     },

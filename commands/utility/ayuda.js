@@ -21,8 +21,8 @@ class CommandError extends Error {
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName("ayuda")
-    .setDescription("Muestra información sobre los comandos disponibles"),
+      .setName("ayuda")
+      .setDescription("Muestra información sobre los comandos disponibles"),
   async execute(interaction) {
     try {
       const client = interaction.client;
@@ -43,15 +43,15 @@ module.exports = {
       });
 
       const embed = new CustomEmbedBuilder()
-        .setTitle("Ayuda del Bot")
-        .setDescription(
-          "Selecciona una categoría para ver los comandos disponibles.",
-        )
-        .build();
+          .setTitle("Ayuda del Bot")
+          .setDescription(
+              "Selecciona una categoría para ver los comandos disponibles.",
+          )
+          .build();
 
       const selectMenu = new StringSelectMenuBuilder()
-        .setCustomId("help_category")
-        .setPlaceholder("Selecciona una categoría");
+          .setCustomId("help_category")
+          .setPlaceholder("Selecciona una categoría");
 
       Object.keys(categorizedCommands).forEach((folder) => {
         if (categorizedCommands[folder].length > 0) {
@@ -65,14 +65,16 @@ module.exports = {
 
       const row = new ActionRowBuilder().addComponents(selectMenu);
 
-      const response = await interaction.editReply({
+      const response = {
         embeds: [embed],
         components: [row],
         ephemeral: true,
-      });
+      };
 
+      // Set up collector after the initial reply
       const filter = (i) => i.user.id === interaction.user.id;
-      const collector = response.createMessageComponentCollector({
+      const message = await interaction.channel.send(response);
+      const collector = message.createMessageComponentCollector({
         filter,
         time: 300000,
       }); // 5 minutes
@@ -84,29 +86,29 @@ module.exports = {
             const categoryCommands = categorizedCommands[category];
 
             const commandList = categoryCommands
-              .map((cmd) => `\`/${cmd.data.name}\`: ${cmd.data.description}`)
-              .join("\n");
+                .map((cmd) => `\`/${cmd.data.name}\`: ${cmd.data.description}`)
+                .join("\n");
             const description =
-              commandList || "No hay comandos disponibles en esta categoría.";
+                commandList || "No hay comandos disponibles en esta categoría.";
 
             const categoryEmbed = new CustomEmbedBuilder()
-              .setTitle(
-                `Comandos de ${category.charAt(0).toUpperCase() + category.slice(1)}`,
-              )
-              .setDescription(description)
-              .build();
+                .setTitle(
+                    `Comandos de ${category.charAt(0).toUpperCase() + category.slice(1)}`,
+                )
+                .setDescription(description)
+                .build();
 
             const buttons = categoryCommands.map((cmd) =>
-              new ButtonBuilder()
-                .setCustomId(`cmd_${cmd.data.name}`)
-                .setLabel(cmd.data.name)
-                .setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder()
+                    .setCustomId(`cmd_${cmd.data.name}`)
+                    .setLabel(cmd.data.name)
+                    .setStyle(ButtonStyle.Secondary),
             );
 
             const buttonRows = [];
             for (let j = 0; j < buttons.length; j += 5) {
               buttonRows.push(
-                new ActionRowBuilder().addComponents(buttons.slice(j, j + 5)),
+                  new ActionRowBuilder().addComponents(buttons.slice(j, j + 5)),
               );
             }
 
@@ -121,33 +123,33 @@ module.exports = {
 
               if (!command) {
                 throw new CommandError(
-                  "COMMAND_NOT_FOUND",
-                  `Command not found: ${commandName}`,
-                  "error",
+                    "COMMAND_NOT_FOUND",
+                    `Command not found: ${commandName}`,
+                    "error",
                 );
               }
 
               const usage =
-                command.data.options?.length > 0
-                  ? `/${command.data.name} ${command.data.options.map((opt) => (opt.required ? `<${opt.name}>` : `[${opt.name}]`)).join(" ")}`
-                  : `/${command.data.name}`;
+                  command.data.options?.length > 0
+                      ? `/${command.data.name} ${command.data.options.map((opt) => (opt.required ? `<${opt.name}>` : `[${opt.name}]`)).join(" ")}`
+                      : `/${command.data.name}`;
 
               const commandEmbed = new CustomEmbedBuilder()
-                .setTitle(`Comando: /${command.data.name}`)
-                .setDescription(
-                  command.data.description || "No hay descripción disponible.",
-                )
-                .addField("Uso", usage)
-                .addField(
-                  "Permisos",
-                  command.permissions?.join(", ") || "Ninguno",
-                )
-                .build();
+                  .setTitle(`Comando: /${command.data.name}`)
+                  .setDescription(
+                      command.data.description || "No hay descripción disponible.",
+                  )
+                  .addField("Uso", usage)
+                  .addField(
+                      "Permisos",
+                      command.permissions?.join(", ") || "Ninguno",
+                  )
+                  .build();
 
               const backButton = new ButtonBuilder()
-                .setCustomId(`back_${command.folder || "Otros"}`)
-                .setLabel("Volver")
-                .setStyle(ButtonStyle.Primary);
+                  .setCustomId(`back_${command.folder || "Otros"}`)
+                  .setLabel("Volver")
+                  .setStyle(ButtonStyle.Primary);
 
               await i.update({
                 embeds: [commandEmbed],
@@ -158,29 +160,29 @@ module.exports = {
               const categoryCommands = categorizedCommands[category];
 
               const commandList = categoryCommands
-                .map((cmd) => `\`/${cmd.data.name}\`: ${cmd.data.description}`)
-                .join("\n");
+                  .map((cmd) => `\`/${cmd.data.name}\`: ${cmd.data.description}`)
+                  .join("\n");
               const description =
-                commandList || "No hay comandos disponibles en esta categoría.";
+                  commandList || "No hay comandos disponibles en esta categoría.";
 
               const categoryEmbed = new CustomEmbedBuilder()
-                .setTitle(
-                  `Comandos de ${category.charAt(0).toUpperCase() + category.slice(1)}`,
-                )
-                .setDescription(description)
-                .build();
+                  .setTitle(
+                      `Comandos de ${category.charAt(0).toUpperCase() + category.slice(1)}`,
+                  )
+                  .setDescription(description)
+                  .build();
 
               const buttons = categoryCommands.map((cmd) =>
-                new ButtonBuilder()
-                  .setCustomId(`cmd_${cmd.data.name}`)
-                  .setLabel(cmd.data.name)
-                  .setStyle(ButtonStyle.Secondary),
+                  new ButtonBuilder()
+                      .setCustomId(`cmd_${cmd.data.name}`)
+                      .setLabel(cmd.data.name)
+                      .setStyle(ButtonStyle.Secondary),
               );
 
               const buttonRows = [];
               for (let j = 0; j < buttons.length; j += 5) {
                 buttonRows.push(
-                  new ActionRowBuilder().addComponents(buttons.slice(j, j + 5)),
+                    new ActionRowBuilder().addComponents(buttons.slice(j, j + 5)),
                 );
               }
 
@@ -200,7 +202,7 @@ module.exports = {
       });
 
       collector.on("end", () => {
-        interaction.editReply({ components: [] }).catch((error) => {
+        message.edit({ components: [] }).catch((error) => {
           logger.error("Error removing components after collector end", {
             error: error.message,
             stack: error.stack,
@@ -212,6 +214,8 @@ module.exports = {
         user: interaction.user.tag,
         guild: interaction.guild?.name,
       });
+
+      return [response];
     } catch (error) {
       logger.error("Error executing help command", {
         error: error.message,

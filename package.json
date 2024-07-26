@@ -25,7 +25,8 @@
     "franc-min": "^6.2.0",
     "globals": "^15.8.0",
     "node-cache": "^5.1.2",
-    "node-fetch": "^3.3.2"
+    "node-fetch": "^3.3.2",
+    "sqlite3": "^5.1.7"
   },
   "devDependencies": {
     "@babel/core": "^7.24.9",

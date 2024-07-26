@@ -7,6 +7,7 @@ const ErrorHandler = require("./utils/errorHandler");
 const CommandHandler = require("./utils/commandHandler");
 const PermissionCheck = require("./utils/permissionCheck");
 const logger = require("./utils/logger");
+const database = require("./data/database");
 
 const client = new Client({
   intents: [
@@ -19,87 +20,120 @@ const client = new Client({
 
 client.commands = new Collection();
 
-async function loadCommands() {
-  for (const folder of COMMAND_FOLDERS) {
-    const commandsPath = path.join(__dirname, "commands", folder);
-    const commandFiles = await fs.readdir(commandsPath);
-    await Promise.all(commandFiles.map(async (file) => {
-      if (file.endsWith(".js")) {
-        const filePath = path.join(commandsPath, file);
-        const command = require(filePath);
-        if ("data" in command && "execute" in command) {
-          client.commands.set(command.data.name, command);
-          logger.info(`Loaded command: ${command.data.name}`);
-        } else {
-          logger.warn(`Invalid command file: ${filePath}`);
-        }
-      }
-    }));
+async function loadCommand(folder, file) {
+  const filePath = path.join(__dirname, "commands", folder, file);
+  try {
+    logger.debug(`Loading command file: ${filePath}`);
+    const command = require(filePath);
+    if ("data" in command && "execute" in command) {
+      client.commands.set(command.data.name, command);
+      logger.info(`Loaded command: ${command.data.name}`);
+    } else {
+      logger.warn(`Invalid command file: ${filePath}`);
+    }
+  } catch (error) {
+    logger.error(`Error loading command file ${filePath}:`, error);
   }
 }
 
+async function loadCommands() {
+  logger.info('Starting to load commands...');
+  const loadPromises = COMMAND_FOLDERS.map(async (folder) => {
+    const commandsPath = path.join(__dirname, "commands", folder);
+    const commandFiles = await fs.readdir(commandsPath);
+    return Promise.all(commandFiles
+        .filter(file => file.endsWith(".js"))
+        .map(file => loadCommand(folder, file))
+    );
+  });
+
+  await Promise.all(loadPromises);
+  logger.info(`Finished loading commands. Total commands: ${client.commands.size}`);
+}
+
 async function loadEvents() {
+  logger.debug('Starting to load events...');
   const eventsPath = path.join(__dirname, "events");
   const eventFiles = await fs.readdir(eventsPath);
-  await Promise.all(eventFiles.map(async (file) => {
-    if (file.endsWith(".js")) {
-      const filePath = path.join(eventsPath, file);
-      const event = require(filePath);
-      if (event.once) {
-        client.once(event.name, (...args) => event.execute(...args));
-      } else {
-        client.on(event.name, (...args) => event.execute(...args));
-      }
-      logger.info(`Loaded event: ${event.name}`);
-    }
-  }));
+
+  const eventPromises = eventFiles
+      .filter(file => file.endsWith(".js"))
+      .map(async (file) => {
+        const filePath = path.join(eventsPath, file);
+        logger.debug(`Loading event file: ${filePath}`);
+        const event = require(filePath);
+        if (event.once) {
+          client.once(event.name, (...args) => event.execute(...args));
+        } else {
+          client.on(event.name, (...args) => event.execute(...args));
+        }
+        logger.info(`Loaded event: ${event.name}`);
+      });
+
+  await Promise.all(eventPromises);
+  logger.debug('Finished loading events');
+}
+
+async function initializeDatabase() {
+  logger.debug('Starting database initialization...');
+  try {
+    await database.connect();
+    logger.info("Database initialized successfully");
+  } catch (error) {
+    logger.error("Failed to initialize database:", error);
+    throw error;
+  }
 }
 
 async function gracefulShutdown(signal) {
   logger.info(`${signal} received. Initiating graceful shutdown...`);
 
   try {
-    // Set bot status to DND
     await client.user.setPresence({
       activities: [{ name: 'Shutting down...', type: ActivityType.Playing }],
       status: 'dnd',
     });
 
-    // Close all voice connections
     client.voice.adapters.forEach((adapter) => adapter.destroy());
 
-    // Destroy the client connection
     logger.info('Destroying Discord client connection...');
     await client.destroy();
+
+    logger.info('Closing database connection...');
+    await database.close();
 
     logger.info('Graceful shutdown completed.');
   } catch (error) {
     logger.error('Error during graceful shutdown:', error);
   } finally {
-    // Force exit after a timeout
-    setTimeout(() => {
-      logger.info('Forcing exit after timeout.');
-      process.exit(0);
-    }, 5000); // Exit after 5 seconds if graceful shutdown doesn't complete
+    process.exit(0);
   }
 }
 
 async function initializeBot() {
-  try {
-    logger.info("Starting bot initialization...");
+  logger.info("Starting bot initialization...");
 
+  try {
+    logger.debug('Initializing database...');
+    await initializeDatabase();
+
+    logger.debug('Initializing error handler...');
     ErrorHandler.init(client);
     logger.info("Error handler initialized");
 
+    logger.debug('Loading commands and events...');
     await Promise.all([loadCommands(), loadEvents()]);
     logger.info("Commands and events loaded");
 
+    logger.debug('Initializing command handler...');
     CommandHandler.init(client);
     logger.info("Command handler initialized");
 
+    logger.debug('Setting up global permission check...');
     PermissionCheck.global(client, ["SendMessages", "ViewChannel"]);
     logger.info("Global permission check set up");
 
+    logger.debug('Logging in to Discord...');
     await client.login(process.env.BOT_TOKEN);
     logger.info("Bot logged in successfully");
 
@@ -114,15 +148,10 @@ async function initializeBot() {
   }
 }
 
-initializeBot();
-
-// Optimize garbage collection
-if (typeof global.gc === 'function') {
-  setInterval(() => {
-    global.gc();
-    logger.debug('Garbage collection performed');
-  }, 30 * 60 * 1000); // Run every 30 minutes
-}
+initializeBot().catch(error => {
+  logger.error("Unhandled error during bot initialization:", error);
+  process.exit(1);
+});
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {

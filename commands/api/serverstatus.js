@@ -4,7 +4,7 @@ const logger = require("../../utils/logger");
 const CustomEmbedBuilder = require("../../utils/embedBuilder");
 const ErrorHandler = require("../../utils/errorHandler");
 const fetch = (...args) =>
-  import("node-fetch").then(({ default: fetch }) => fetch(...args));
+    import("node-fetch").then(({ default: fetch }) => fetch(...args));
 
 const PROXY_URL = "https://api.allorigins.win/raw?url=";
 const CACHE_DURATION = 60000; // 1 minute cache
@@ -26,8 +26,8 @@ class CommandError extends Error {
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName("servidor")
-    .setDescription("Muestra el estado del servidor y los jugadores activos."),
+      .setName("servidor")
+      .setDescription("Muestra el estado del servidor y los jugadores activos."),
   folder: "api",
   cooldown: 30, // 30 seconds cooldown
 
@@ -35,9 +35,18 @@ module.exports = {
     try {
       const data = await this.getServerData();
       const embed = this.createServerEmbed(data);
-      await interaction.editReply({ embeds: [embed] });
-      logger.info(`Server status command executed by ${interaction.user.tag}`);
+      logger.info(`Server status command executed by ${interaction.user.tag}`, {
+        guildId: interaction.guild.id,
+        channelId: interaction.channel.id,
+      });
+      return [{ embeds: [embed] }];
     } catch (error) {
+      logger.error("Error in server status command", {
+        error: error.message,
+        stack: error.stack,
+        user: interaction.user.tag,
+        guild: interaction.guild?.name
+      });
       await ErrorHandler.handle(error, interaction);
     }
   },
@@ -45,8 +54,8 @@ module.exports = {
   async getServerData() {
     const now = Date.now();
     if (
-      cachedData &&
-      now - lastFetchTime <
+        cachedData &&
+        now - lastFetchTime <
         (isUsingFallback ? FALLBACK_DURATION : CACHE_DURATION)
     ) {
       return cachedData;
@@ -60,9 +69,9 @@ module.exports = {
         isUsingFallback = false;
       } else {
         throw new CommandError(
-          "NULL_DATA",
-          "Received null data from API",
-          "error",
+            "NULL_DATA",
+            "Received null data from API",
+            "error",
         );
       }
       return data;
@@ -90,9 +99,9 @@ module.exports = {
       }
     }
     throw new CommandError(
-      "FETCH_FAILED",
-      `Failed to fetch data after ${retries} attempts`,
-      "error",
+        "FETCH_FAILED",
+        `Failed to fetch data after ${retries} attempts`,
+        "error",
     );
   },
 
@@ -100,14 +109,14 @@ module.exports = {
     const serverId = process.env.SERVER_ID_API;
     if (!serverId) {
       throw new CommandError(
-        "MISSING_ENV",
-        "SERVER_ID_API is not set in the environment variables",
-        "error",
+          "MISSING_ENV",
+          "SERVER_ID_API is not set in the environment variables",
+          "error",
       );
     }
 
     const targetUrl = encodeURIComponent(
-      `${config.serverStatus.apiBaseUrl}${serverId}`,
+        `${config.serverStatus.apiBaseUrl}${serverId}`,
     );
     const proxyUrl = `${PROXY_URL}${targetUrl}`;
 
@@ -120,18 +129,18 @@ module.exports = {
 
       if (!response.ok) {
         throw new CommandError(
-          "HTTP_ERROR",
-          `HTTP error! status: ${response.status}`,
-          "error",
+            "HTTP_ERROR",
+            `HTTP error! status: ${response.status}`,
+            "error",
         );
       }
 
       const data = await response.json();
       if (!data) {
         throw new CommandError(
-          "NULL_DATA",
-          "Received null data from API",
-          "error",
+            "NULL_DATA",
+            "Received null data from API",
+            "error",
         );
       }
       this.validateServerData(data);
@@ -147,9 +156,9 @@ module.exports = {
   validateServerData(data) {
     if (!data || typeof data !== "object") {
       throw new CommandError(
-        "INVALID_DATA",
-        "Invalid server data received",
-        "error",
+          "INVALID_DATA",
+          "Invalid server data received",
+          "error",
       );
     }
 
@@ -165,9 +174,9 @@ module.exports = {
     for (const field of requiredFields) {
       if (!(field in data)) {
         throw new CommandError(
-          "MISSING_FIELD",
-          `Missing required field in server data: ${field}`,
-          "error",
+            "MISSING_FIELD",
+            `Missing required field in server data: ${field}`,
+            "error",
         );
       }
     }
@@ -178,43 +187,43 @@ module.exports = {
 
   createServerEmbed(data) {
     const serverName = this.stripHtmlTags(
-      data.info || "Server Name Not Available",
+        data.info || "Server Name Not Available",
     );
     return new CustomEmbedBuilder()
-      .setColor(
-        data.online
-          ? config.serverStatus.embedColor.online
-          : config.serverStatus.embedColor.offline,
-      )
-      .setTitle("Estado del Servidor")
-      .addField("Nombre", serverName, false)
-      .addField(
-        "Estado",
-        data.online
-          ? config.serverStatusTexts.online
-          : config.serverStatusTexts.offline,
-        true,
-      )
-      .addField(
-        "Jugadores",
-        `${data.players}${data.maxPlayers !== "N/A" ? `/${data.maxPlayers}` : ""}`,
-        true,
-      )
-      .addField("Version", data.version, true)
-      .addField(
-        "Fuego Amigo",
-        data.friendlyFire
-          ? config.serverStatusTexts.friendlyFireEnabled
-          : config.serverStatusTexts.friendlyFireDisabled,
-        true,
-      )
-      .setFooter({
-        text: `IP: ${data.ip}:${data.port} | ${
-          config.embeds.footerText
-        }${isUsingFallback ? " | Datos en caché" : ""}`,
-      })
-      .setThumbnail(process.env.LINK_IMAGE_SERVER)
-      .build();
+        .setColor(
+            data.online
+                ? config.serverStatus.embedColor.online
+                : config.serverStatus.embedColor.offline,
+        )
+        .setTitle("Estado del Servidor")
+        .addField("Nombre", serverName, false)
+        .addField(
+            "Estado",
+            data.online
+                ? config.serverStatusTexts.online
+                : config.serverStatusTexts.offline,
+            true,
+        )
+        .addField(
+            "Jugadores",
+            `${data.players}${data.maxPlayers !== "N/A" ? `/${data.maxPlayers}` : ""}`,
+            true,
+        )
+        .addField("Version", data.version, true)
+        .addField(
+            "Fuego Amigo",
+            data.friendlyFire
+                ? config.serverStatusTexts.friendlyFireEnabled
+                : config.serverStatusTexts.friendlyFireDisabled,
+            true,
+        )
+        .setFooter({
+          text: `IP: ${data.ip}:${data.port} | ${
+              config.embeds.footerText
+          }${isUsingFallback ? " | Datos en caché" : ""}`,
+        })
+        .setThumbnail(process.env.LINK_IMAGE_SERVER)
+        .build();
   },
 
   stripHtmlTags(html) {

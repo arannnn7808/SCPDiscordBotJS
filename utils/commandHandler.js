@@ -32,7 +32,12 @@ class CommandHandler {
         return;
       }
 
-      await command.execute(interaction);
+      const response = await command.execute(interaction);
+
+      if (response) {
+        await this.sendMultiResponse(interaction, response);
+      }
+
       logger.command(command.data.name, interaction.user, interaction.guild);
     } catch (error) {
       await ErrorHandler.handle(error, interaction);
@@ -46,19 +51,47 @@ class CommandHandler {
     logger.debug(`Interaction prepared for command: ${command.data.name}`);
   }
 
+  async sendMultiResponse(interaction, response) {
+    if (!response) return;
+
+    if (Array.isArray(response)) {
+      // Handle multiple responses
+      for (let i = 0; i < response.length; i++) {
+        if (i === 0) {
+          // Send the first response as a reply or edit
+          if (interaction.deferred) {
+            await interaction.editReply(response[i]);
+          } else if (!interaction.replied) {
+            await interaction.reply(response[i]);
+          }
+        } else {
+          // Send subsequent responses as follow-ups
+          await interaction.followUp(response[i]);
+        }
+      }
+    } else {
+      // Handle single response
+      if (interaction.deferred) {
+        await interaction.editReply(response);
+      } else if (!interaction.replied) {
+        await interaction.reply(response);
+      }
+    }
+  }
+
   async checkPermissions(interaction, command) {
     if (command.permissions) {
       const hasPermission = await PermissionCheck.check(
-        interaction,
-        command.permissions,
+          interaction,
+          command.permissions
       );
       if (!hasPermission) {
         logger.warn(
-          `Permission check failed for command: ${command.data.name}`,
-          {
-            userId: interaction.user.id,
-            guildId: interaction.guild?.id,
-          },
+            `Permission check failed for command: ${command.data.name}`,
+            {
+              userId: interaction.user.id,
+              guildId: interaction.guild?.id,
+            }
         );
         return false;
       }
@@ -79,12 +112,12 @@ class CommandHandler {
 
     if (timestamps.has(interaction.user.id)) {
       const expirationTime =
-        timestamps.get(interaction.user.id) + cooldownAmount;
+          timestamps.get(interaction.user.id) + cooldownAmount;
 
       if (now < expirationTime) {
         const timeLeft = (expirationTime - now) / 1000;
-        await interaction.editReply({
-          content: `Please wait ${timeLeft.toFixed(1)} more second(s) before reusing the \`${command.data.name}\` command.`,
+        await interaction.reply({
+          content: `Por favor, espera ${timeLeft.toFixed(1)} segundos más antes de usar el comando \`${command.data.name}\` de nuevo.`,
           ephemeral: true,
         });
         return false;
@@ -99,14 +132,14 @@ class CommandHandler {
 
   static getTargetUser(interaction) {
     const targetUser =
-      interaction.options.getUser("usuario") ||
-      interaction.options.getMember("usuario");
+        interaction.options.getUser("usuario") ||
+        interaction.options.getMember("usuario");
     if (!targetUser) {
       logger.warn(
-        `Target user not found for command: ${interaction.commandName}`,
+          `Target user not found for command: ${interaction.commandName}`
       );
       throw new Error(
-        "El usuario especificado no se encuentra en el servidor.",
+          "El usuario especificado no se encuentra en el servidor."
       );
     }
     return targetUser;
