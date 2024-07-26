@@ -16,6 +16,7 @@ class CommandError extends Error {
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("nivel")
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
         .setDescription("Gestiona los niveles y XP de los usuarios")
         .addSubcommand(subcommand =>
             subcommand
@@ -34,7 +35,6 @@ module.exports = {
                 .setDescription("Añade XP a un usuario")
                 .addUserOption(option => option.setName("usuario").setDescription("Usuario al que añadir XP").setRequired(true))
                 .addIntegerOption(option => option.setName("xp").setDescription("Cantidad de XP a añadir").setRequired(true))
-                .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
         ),
     folder: "utility",
     permissions: ["ManageGuild"],
