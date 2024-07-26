@@ -1,12 +1,13 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
-const fs = require('fs').promises;
 const logger = require('../utils/logger');
 
 class Database {
     constructor() {
-        this.dbPath = path.join(__dirname, 'warnings.db');
-        this.db = null;
+        this.warningsDbPath = path.join(__dirname, 'warnings.db');
+        this.levelsDbPath = path.join(__dirname, 'levels.db');
+        this.warningsDb = null;
+        this.levelsDb = null;
         this.currentSchema = {
             warnings: `
                 CREATE TABLE IF NOT EXISTS warnings (
@@ -20,22 +21,45 @@ class Database {
                     UNIQUE(guild_id, user_id, warn_id)
                 )
             `,
-            indexes: [
-                'CREATE INDEX IF NOT EXISTS idx_guild_user ON warnings(guild_id, user_id)'
-            ]
+            levels: `
+                CREATE TABLE IF NOT EXISTS levels (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    guild_id TEXT,
+                    user_id TEXT,
+                    xp INTEGER DEFAULT 0,
+                    level INTEGER DEFAULT 0,
+                    last_message_timestamp INTEGER,
+                    UNIQUE(guild_id, user_id)
+                )
+            `,
+            indexes: {
+                warnings: [
+                    'CREATE INDEX IF NOT EXISTS idx_guild_user ON warnings(guild_id, user_id)'
+                ],
+                levels: [
+                    'CREATE INDEX IF NOT EXISTS idx_levels_guild_user ON levels(guild_id, user_id)'
+                ]
+            }
         };
     }
 
     async connect() {
+        return Promise.all([
+            this.connectDatabase('warnings', this.warningsDbPath),
+            this.connectDatabase('levels', this.levelsDbPath)
+        ]);
+    }
+
+    async connectDatabase(dbName, dbPath) {
         return new Promise((resolve, reject) => {
-            this.db = new sqlite3.Database(this.dbPath, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, async (err) => {
+            this[`${dbName}Db`] = new sqlite3.Database(dbPath, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, async (err) => {
                 if (err) {
-                    logger.error('Could not connect to database', err);
+                    logger.error(`Could not connect to ${dbName} database`, err);
                     reject(err);
                 } else {
-                    logger.info('Connected to the SQLite database.');
+                    logger.info(`Connected to the ${dbName} SQLite database.`);
                     try {
-                        await this.initSchema();
+                        await this.initSchema(dbName);
                         resolve();
                     } catch (initErr) {
                         reject(initErr);
@@ -45,25 +69,25 @@ class Database {
         });
     }
 
-    async initSchema() {
+    async initSchema(dbName) {
         await this.runTransaction(async () => {
-            await this.run(this.currentSchema.warnings);
-            for (const index of this.currentSchema.indexes) {
-                await this.run(index);
+            await this.run(this.currentSchema[dbName], [], dbName);
+            for (const index of this.currentSchema.indexes[dbName]) {
+                await this.run(index, [], dbName);
             }
-            await this.checkAndUpdateSchema();
-        });
-        logger.info('Database schema initialized and up to date.');
+            await this.checkAndUpdateSchema(dbName);
+        }, dbName);
+        logger.info(`${dbName} database schema initialized and up to date.`);
     }
 
-    async checkAndUpdateSchema() {
-        const currentColumns = await this.getTableInfo('warnings');
-        const schemaColumns = this.extractColumnsFromSchema(this.currentSchema.warnings);
+    async checkAndUpdateSchema(dbName) {
+        const currentColumns = await this.getTableInfo(dbName, dbName);
+        const schemaColumns = this.extractColumnsFromSchema(this.currentSchema[dbName]);
 
         const missingColumns = schemaColumns.filter(col => !currentColumns.includes(col));
         for (const column of missingColumns) {
-            await this.addColumn('warnings', column);
-            logger.info(`Added new column: ${column} to warnings table`);
+            await this.addColumn(dbName, dbName, column);
+            logger.info(`Added new column: ${column} to ${dbName} table`);
         }
     }
 
@@ -73,41 +97,41 @@ class Database {
         return matches.map(match => match[1].toLowerCase());
     }
 
-    async getTableInfo(tableName) {
-        const rows = await this.all(`PRAGMA table_info(${tableName})`);
+    async getTableInfo(tableName, dbName) {
+        const rows = await this.all(`PRAGMA table_info(${tableName})`, [], dbName);
         return rows.map(row => row.name.toLowerCase());
     }
 
-    async addColumn(tableName, columnName) {
-        await this.run(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} TEXT`);
+    async addColumn(tableName, dbName, columnName) {
+        await this.run(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} TEXT`, [], dbName);
     }
 
-    async runTransaction(callback) {
+    async runTransaction(callback, dbName) {
         return new Promise((resolve, reject) => {
-            this.db.serialize(() => {
-                this.db.run('BEGIN TRANSACTION');
+            this[`${dbName}Db`].serialize(() => {
+                this[`${dbName}Db`].run('BEGIN TRANSACTION');
                 callback().then(() => {
-                    this.db.run('COMMIT', (err) => {
+                    this[`${dbName}Db`].run('COMMIT', (err) => {
                         if (err) {
-                            this.db.run('ROLLBACK');
+                            this[`${dbName}Db`].run('ROLLBACK');
                             reject(err);
                         } else {
                             resolve();
                         }
                     });
                 }).catch((err) => {
-                    this.db.run('ROLLBACK');
+                    this[`${dbName}Db`].run('ROLLBACK');
                     reject(err);
                 });
             });
         });
     }
 
-    run(sql, params = []) {
+    run(sql, params = [], dbName) {
         return new Promise((resolve, reject) => {
-            this.db.run(sql, params, function(err) {
+            this[`${dbName}Db`].run(sql, params, function(err) {
                 if (err) {
-                    logger.error('Error running sql ' + sql, err);
+                    logger.error(`Error running sql ${sql} on ${dbName} database`, err);
                     reject(err);
                 } else {
                     resolve({ id: this.lastID, changes: this.changes });
@@ -116,11 +140,11 @@ class Database {
         });
     }
 
-    get(sql, params = []) {
+    get(sql, params = [], dbName) {
         return new Promise((resolve, reject) => {
-            this.db.get(sql, params, (err, result) => {
+            this[`${dbName}Db`].get(sql, params, (err, result) => {
                 if (err) {
-                    logger.error('Error running sql: ' + sql, err);
+                    logger.error(`Error running sql: ${sql} on ${dbName} database`, err);
                     reject(err);
                 } else {
                     resolve(result);
@@ -129,11 +153,11 @@ class Database {
         });
     }
 
-    all(sql, params = []) {
+    all(sql, params = [], dbName) {
         return new Promise((resolve, reject) => {
-            this.db.all(sql, params, (err, rows) => {
+            this[`${dbName}Db`].all(sql, params, (err, rows) => {
                 if (err) {
-                    logger.error('Error running sql: ' + sql, err);
+                    logger.error(`Error running sql: ${sql} on ${dbName} database`, err);
                     reject(err);
                 } else {
                     resolve(rows);
@@ -142,27 +166,31 @@ class Database {
         });
     }
 
+    // Warnings methods
     async addWarning(guildId, userId, reason, moderatorId) {
         const warnId = await this.getNextWarnId(guildId, userId);
         const result = await this.run(
             'INSERT INTO warnings (guild_id, user_id, warn_id, reason, moderator_id, timestamp) VALUES (?, ?, ?, ?, ?, ?)',
-            [guildId, userId, warnId, reason, moderatorId, Date.now()]
+            [guildId, userId, warnId, reason, moderatorId, Date.now()],
+            'warnings'
         );
         logger.info(`Warning added for user ${userId} in guild ${guildId}, warn_id: ${warnId}`);
         return { id: result.id, warnId };
     }
 
-    getWarnings(guildId, userId) {
+    async getWarnings(guildId, userId) {
         return this.all(
             'SELECT * FROM warnings WHERE guild_id = ? AND user_id = ? ORDER BY warn_id ASC',
-            [guildId, userId]
+            [guildId, userId],
+            'warnings'
         );
     }
 
     async removeWarning(guildId, userId, warnId) {
         const result = await this.run(
             'DELETE FROM warnings WHERE guild_id = ? AND user_id = ? AND warn_id = ?',
-            [guildId, userId, warnId]
+            [guildId, userId, warnId],
+            'warnings'
         );
         logger.info(`Removed warning #${warnId} for user ${userId} in guild ${guildId}`);
         return result.changes > 0;
@@ -171,7 +199,8 @@ class Database {
     async clearWarnings(guildId, userId) {
         const result = await this.run(
             'DELETE FROM warnings WHERE guild_id = ? AND user_id = ?',
-            [guildId, userId]
+            [guildId, userId],
+            'warnings'
         );
         logger.info(`Cleared ${result.changes} warnings for user ${userId} in guild ${guildId}`);
         return result.changes;
@@ -180,17 +209,18 @@ class Database {
     async getNextWarnId(guildId, userId) {
         const result = await this.get(
             'SELECT COALESCE(MAX(warn_id), 0) + 1 as next_id FROM warnings WHERE guild_id = ? AND user_id = ?',
-            [guildId, userId]
+            [guildId, userId],
+            'warnings'
         );
         return result.next_id;
     }
 
-    getTotalWarnings(guildId) {
-        return this.get('SELECT COUNT(*) as total FROM warnings WHERE guild_id = ?', [guildId])
-            .then(result => result.total);
+    async getTotalWarnings(guildId) {
+        const result = await this.get('SELECT COUNT(*) as total FROM warnings WHERE guild_id = ?', [guildId], 'warnings');
+        return result.total;
     }
 
-    getMostWarnedUsers(guildId, limit = 5) {
+    async getMostWarnedUsers(guildId, limit = 5) {
         return this.all(
             `SELECT user_id, COUNT(*) as warn_count 
              FROM warnings 
@@ -198,20 +228,86 @@ class Database {
              GROUP BY user_id 
              ORDER BY warn_count DESC 
              LIMIT ?`,
-            [guildId, limit]
+            [guildId, limit],
+            'warnings'
         );
     }
 
+    // Levels methods
+    async addXP(guildId, userId, xpToAdd) {
+        const user = await this.getUser(guildId, userId);
+        if (user) {
+            const newXP = user.xp + xpToAdd;
+            const newLevel = this.calculateLevel(newXP);
+            await this.run(
+                'UPDATE levels SET xp = ?, level = ?, last_message_timestamp = ? WHERE guild_id = ? AND user_id = ?',
+                [newXP, newLevel, Date.now(), guildId, userId],
+                'levels'
+            );
+            return { xp: newXP, level: newLevel, oldLevel: user.level };
+        } else {
+            const newLevel = this.calculateLevel(xpToAdd);
+            await this.run(
+                'INSERT INTO levels (guild_id, user_id, xp, level, last_message_timestamp) VALUES (?, ?, ?, ?, ?)',
+                [guildId, userId, xpToAdd, newLevel, Date.now()],
+                'levels'
+            );
+            return { xp: xpToAdd, level: newLevel, oldLevel: 0 };
+        }
+    }
+
+    async getUser(guildId, userId) {
+        return this.get('SELECT * FROM levels WHERE guild_id = ? AND user_id = ?', [guildId, userId], 'levels');
+    }
+
+    calculateLevel(xp) {
+        return Math.floor(0.1 * Math.sqrt(xp));
+    }
+
+    async getLeaderboard(guildId, limit = 10) {
+        return this.all(
+            'SELECT * FROM levels WHERE guild_id = ? ORDER BY xp DESC LIMIT ?',
+            [guildId, limit],
+            'levels'
+        );
+    }
+
+    async setXP(guildId, userId, xp) {
+        const level = this.calculateLevel(xp);
+        const result = await this.run(
+            'INSERT OR REPLACE INTO levels (guild_id, user_id, xp, level, last_message_timestamp) VALUES (?, ?, ?, ?, ?)',
+            [guildId, userId, xp, level, Date.now()],
+            'levels'
+        );
+        return { xp, level, changes: result.changes };
+    }
+
+    async resetUserLevel(guildId, userId) {
+        const result = await this.run(
+            'DELETE FROM levels WHERE guild_id = ? AND user_id = ?',
+            [guildId, userId],
+            'levels'
+        );
+        return result.changes > 0;
+    }
+
     async close() {
+        await Promise.all([
+            this.closeDatabase('warnings'),
+            this.closeDatabase('levels')
+        ]);
+    }
+
+    async closeDatabase(dbName) {
         return new Promise((resolve, reject) => {
-            if (this.db) {
-                this.db.close((err) => {
+            if (this[`${dbName}Db`]) {
+                this[`${dbName}Db`].close((err) => {
                     if (err) {
-                        logger.error('Error closing the database', err);
+                        logger.error(`Error closing the ${dbName} database`, err);
                         reject(err);
                     } else {
-                        logger.info('Database connection closed.');
-                        this.db = null;
+                        logger.info(`${dbName} database connection closed.`);
+                        this[`${dbName}Db`] = null;
                         resolve();
                     }
                 });
