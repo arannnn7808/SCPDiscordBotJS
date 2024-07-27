@@ -1,4 +1,4 @@
-# SCPDiscordBot - Tutorial en Español
+# SCPDiscordBot
 
 ## ESTA ES UNA VERSION DE DESARROLLO, NO SE ASEGURA QUE SEA ESTABLE.
 

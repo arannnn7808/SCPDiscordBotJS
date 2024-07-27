@@ -4,3 +4,4 @@ node_modules/
 .idea/
 ./LICENSE
 data/warnings.db
+data/levels.db
