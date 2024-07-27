@@ -28,8 +28,9 @@ class CommandHandler {
         return;
       }
 
-      if (!(await this.checkCooldown(interaction, command))) {
-        return;
+      const cooldownCheck = await this.checkCooldown(interaction, command);
+      if (!cooldownCheck.result) {
+        return await this.sendMultiResponse(interaction, [cooldownCheck.response]);
       }
 
       const response = await command.execute(interaction);
@@ -111,23 +112,24 @@ class CommandHandler {
     const cooldownAmount = (command.cooldown || 3) * 1000;
 
     if (timestamps.has(interaction.user.id)) {
-      const expirationTime =
-          timestamps.get(interaction.user.id) + cooldownAmount;
+      const expirationTime = timestamps.get(interaction.user.id) + cooldownAmount;
 
       if (now < expirationTime) {
         const timeLeft = (expirationTime - now) / 1000;
-        await interaction.reply({
-          content: `Por favor, espera ${timeLeft.toFixed(1)} segundos más antes de usar el comando \`${command.data.name}\` de nuevo.`,
-          ephemeral: true,
-        });
-        return false;
+        return {
+          result: false,
+          response: {
+            content: `Por favor, espera ${timeLeft.toFixed(1)} segundos más antes de usar el comando \`${command.data.name}\` de nuevo.`,
+            ephemeral: true
+          }
+        };
       }
     }
 
     timestamps.set(interaction.user.id, now);
     setTimeout(() => timestamps.delete(interaction.user.id), cooldownAmount);
 
-    return true;
+    return { result: true };
   }
 
   static getTargetUser(interaction) {

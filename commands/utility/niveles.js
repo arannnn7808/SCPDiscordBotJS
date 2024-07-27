@@ -4,25 +4,19 @@ const ErrorHandler = require("../../utils/errorHandler");
 const logger = require("../../utils/logger");
 const database = require("../../data/database");
 
-class CommandError extends Error {
-    constructor(code, message, level = "error") {
-        super(message);
-        this.name = "CommandError";
-        this.code = code;
-        this.level = level;
-    }
-}
-
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("nivel")
-        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-        .setDescription("Gestiona los niveles y XP de los usuarios")
+        .setDescription("Gestiona el sistema de niveles")
         .addSubcommand(subcommand =>
             subcommand
-                .setName("verificar")
+                .setName("ver")
                 .setDescription("Verifica tu nivel o el de otro usuario")
-                .addUserOption(option => option.setName("usuario").setDescription("Usuario a verificar (opcional)"))
+                .addUserOption(option =>
+                    option.setName("usuario")
+                        .setDescription("Usuario a verificar (opcional)")
+                        .setRequired(false)
+                )
         )
         .addSubcommand(subcommand =>
             subcommand
@@ -35,50 +29,298 @@ module.exports = {
                 .setDescription("Añade XP a un usuario")
                 .addUserOption(option => option.setName("usuario").setDescription("Usuario al que añadir XP").setRequired(true))
                 .addIntegerOption(option => option.setName("xp").setDescription("Cantidad de XP a añadir").setRequired(true))
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName("establecer")
+                .setDescription("Establece el XP de un usuario")
+                .addUserOption(option => option.setName("usuario").setDescription("Usuario al que establecer XP").setRequired(true))
+                .addIntegerOption(option => option.setName("xp").setDescription("Cantidad de XP a establecer").setRequired(true))
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName("resetear")
+                .setDescription("Resetea el nivel de un usuario")
+                .addUserOption(option => option.setName("usuario").setDescription("Usuario a resetear").setRequired(true))
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName("limpiar")
+                .setDescription("Limpia los usuarios inactivos de la base de datos")
         ),
     folder: "utility",
-    permissions: ["ManageGuild"],
+    permissions: ["SendMessages"],
     cooldown: 5,
 
     async execute(interaction) {
         try {
             const subcommand = interaction.options.getSubcommand();
 
+            let response;
             switch (subcommand) {
-                case "verificar":
-                    return await this.checkLevel(interaction);
+                case "ver":
+                    response = await this.checkLevel(interaction);
+                    break;
                 case "clasificacion":
-                    return await this.showLeaderboard(interaction);
+                    response = await this.showLeaderboard(interaction);
+                    break;
                 case "agregar":
-                    return await this.addXP(interaction);
+                    response = await this.addXP(interaction);
+                    break;
+                case "establecer":
+                    response = await this.setXP(interaction);
+                    break;
+                case "resetear":
+                    response = await this.resetUserLevel(interaction);
+                    break;
+                case "limpiar":
+                    response = await this.clearInactiveUsers(interaction);
+                    break;
                 default:
-                    throw new CommandError("INVALID_SUBCOMMAND", `Subcomando desconocido: ${subcommand}`);
+                    throw new Error(`Subcomando desconocido: ${subcommand}`);
             }
+
+            // Return the response for the command handler to process
+            return response;
         } catch (error) {
-            logger.error("Error en el comando de nivel", error, { interaction });
-            await ErrorHandler.handle(error, interaction);
+            logger.error("Error inesperado en el comando de nivel", error, {interaction});
+            return ErrorHandler.handle(error, interaction);
         }
     },
 
     async checkLevel(interaction) {
-        // TODO: Implementar lógica de verificación de nivel
-        // 1. Obtener el usuario objetivo (el que usa el comando u otro mencionado)
-        // 2. Usar database.getUser() para obtener los datos del usuario
-        // 3. Crear y enviar un embed con el nivel y XP del usuario
+        const targetUser = interaction.options.getUser("usuario") || interaction.user;
+        const userData = await database.getUser(interaction.guild.id, targetUser.id);
+
+        if (!userData) {
+            logger.info(`Este usuario no tiene ningún nivel registrado.`, {
+                commandName: 'nivel',
+                userId: interaction.user.id,
+                guildId: interaction.guild.id
+            });
+
+            const noDataEmbed = new CustomEmbedBuilder()
+                .setTitle(`Sin datos de nivel`)
+                .setDescription(`${targetUser.toString()} no tiene ningún nivel registrado.`)
+                .setColor("#FFA500")
+                .build();
+
+            return [{embeds: [noDataEmbed]}];
+        }
+
+        const nextLevelXP = (database.calculateLevel(userData.xp) + 1) * 100;
+
+        const embed = new CustomEmbedBuilder()
+            .setTitle(`Nivel de ${targetUser.username}`)
+            .setDescription(`Información de nivel para ${targetUser.toString()}`)
+            .addField("Nivel", userData.level.toString(), true)
+            .addField("XP", userData.xp.toString(), true)
+            .addField("XP para el siguiente nivel", (nextLevelXP - userData.xp).toString(), true)
+            .setColor("#00FF00")
+            .setThumbnail(targetUser.displayAvatarURL({dynamic: true}))
+            .build();
+
+        return [{embeds: [embed]}];
     },
 
     async showLeaderboard(interaction) {
-        // TODO: Implementar lógica de clasificación
-        // 1. Usar database.getLeaderboard() para obtener los mejores usuarios
-        // 2. Crear y enviar un embed con la información de la clasificación
+        const leaderboard = await database.getLeaderboard(interaction.guild.id);
+
+        if (leaderboard.length === 0) {
+            logger.info(`No hay datos de nivel para mostrar en este servidor.`, {
+                commandName: 'nivel',
+                userId: interaction.user.id,
+                guildId: interaction.guild.id
+            });
+
+            const noDataEmbed = new CustomEmbedBuilder()
+                .setTitle(`Sin datos de clasificación`)
+                .setDescription(`No hay datos de nivel para mostrar en este servidor.`)
+                .setColor("#FFA500")
+                .build();
+
+            return [{embeds: [noDataEmbed]}];
+        }
+
+        const embed = new CustomEmbedBuilder()
+            .setTitle(`Clasificación de XP de ${interaction.guild.name}`)
+            .setDescription("Top 10 usuarios con más XP")
+            .setColor("#FFA500");
+
+        for (let i = 0; i < leaderboard.length; i++) {
+            const user = await interaction.client.users.fetch(leaderboard[i].user_id);
+            embed.addField(
+                `#${i + 1} ${user.username}`,
+                `Nivel: ${leaderboard[i].level} | XP: ${leaderboard[i].xp}`
+            );
+        }
+
+        return [{embeds: [embed.build()]}];
     },
 
     async addXP(interaction) {
-        // TODO: Implementar lógica de adición de XP
-        // 1. Verificar permisos del usuario que ejecuta el comando
-        // 2. Obtener el usuario objetivo y la cantidad de XP a añadir
-        // 3. Usar database.addXP() para añadir XP al usuario
-        // 4. Verificar si el usuario ha subido de nivel
-        // 5. Enviar un mensaje de confirmación
+        if (!interaction.member.permissions.has(PermissionFlagsBits.ManageGuild)) {
+            return [{content: "No tienes permisos para usar este comando.", ephemeral: true}];
+        }
+
+        const targetUser = interaction.options.getUser("usuario");
+        const xpToAdd = interaction.options.getInteger("xp");
+
+        if (xpToAdd <= 0) {
+            logger.info(`Cantidad de XP inválida para añadir.`, {
+                commandName: 'nivel',
+                userId: interaction.user.id,
+                guildId: interaction.guild.id,
+                xpToAdd: xpToAdd
+            });
+
+            const invalidXPEmbed = new CustomEmbedBuilder()
+                .setTitle(`XP Inválido`)
+                .setDescription(`La cantidad de XP a añadir debe ser mayor que 0.`)
+                .setColor("#FF0000")
+                .build();
+
+            return [{embeds: [invalidXPEmbed]}];
+        }
+
+        const {xp, level, oldLevel} = await database.addXP(interaction.guild.id, targetUser.id, xpToAdd);
+
+        const embed = new CustomEmbedBuilder()
+            .setTitle("XP Añadido")
+            .setDescription(`Se ha añadido XP a ${targetUser.toString()}`)
+            .addField("XP Añadido", xpToAdd.toString(), true)
+            .addField("XP Total", xp.toString(), true)
+            .addField("Nivel Actual", level.toString(), true)
+            .setColor("#00FF00");
+
+        if (level > oldLevel) {
+            embed.addField("¡Subida de Nivel!", `${targetUser.username} ha subido al nivel ${level}!`);
+        }
+
+        return [{embeds: [embed.build()]}];
+    },
+
+    async setXP(interaction) {
+        if (!interaction.member.permissions.has(PermissionFlagsBits.ManageGuild)) {
+            return [{content: "No tienes permisos para usar este comando.", ephemeral: true}];
+        }
+
+        const targetUser = interaction.options.getUser("usuario");
+        const xpToSet = interaction.options.getInteger("xp");
+
+        if (xpToSet < 0) {
+            logger.info(`Cantidad de XP inválida para establecer.`, {
+                commandName: 'nivel',
+                userId: interaction.user.id,
+                guildId: interaction.guild.id,
+                xpToSet: xpToSet
+            });
+
+            const invalidXPEmbed = new CustomEmbedBuilder()
+                .setTitle(`XP Inválido`)
+                .setDescription(`La cantidad de XP a establecer no puede ser negativa.`)
+                .setColor("#FF0000")
+                .build();
+
+            return [{embeds: [invalidXPEmbed]}];
+        }
+
+        const {xp, level, changes} = await database.setXP(interaction.guild.id, targetUser.id, xpToSet);
+
+        const embed = new CustomEmbedBuilder()
+            .setTitle("XP Establecido")
+            .setDescription(`Se ha establecido el XP de ${targetUser.toString()}`)
+            .addField("XP Establecido", xp.toString(), true)
+            .addField("Nivel Actual", level.toString(), true)
+            .setColor("#00FF00")
+            .build();
+
+        return [{embeds: [embed]}];
+    },
+
+    async resetUserLevel(interaction) {
+        if (!interaction.member.permissions.has(PermissionFlagsBits.ManageGuild)) {
+            return [{content: "No tienes permisos para usar este comando.", ephemeral: true}];
+        }
+
+        const targetUser = interaction.options.getUser("usuario");
+        const reset = await database.resetUserLevel(interaction.guild.id, targetUser.id);
+
+        if (reset) {
+            const embed = new CustomEmbedBuilder()
+                .setTitle("Nivel Reseteado")
+                .setDescription(`Se ha reseteado el nivel de ${targetUser.toString()}`)
+                .setColor("#00FF00")
+                .build();
+
+            return [{embeds: [embed]}];
+        } else {
+            logger.info(`No se pudo resetear el nivel del usuario.`, {
+                commandName: 'nivel',
+                userId: interaction.user.id,
+                guildId: interaction.guild.id,
+                targetUserId: targetUser.id
+            });
+
+            const noResetEmbed = new CustomEmbedBuilder()
+                .setTitle(`Reseteo Fallido`)
+                .setDescription(`No se pudo resetear el nivel del usuario. Es posible que no tuviera un nivel registrado.`)
+                .setColor("#FFA500")
+                .build();
+
+            return [{embeds: [noResetEmbed]}];
+        }
+    },
+
+    async clearInactiveUsers(interaction) {
+        if (!interaction.member.permissions.has(PermissionFlagsBits.ManageGuild)) {
+            return [{content: "No tienes permisos para usar este comando.", ephemeral: true}];
+        }
+
+        try {
+            logger.debug(`Starting clearInactiveUsers for guild ${interaction.guild.id}`);
+
+            // Fetch all guild members
+            logger.debug(`Fetching guild members for guild ${interaction.guild.id}`);
+            await interaction.guild.members.fetch();
+            const activeUserIds = interaction.guild.members.cache.map(member => member.id);
+            logger.debug(`Fetched ${activeUserIds.length} active user IDs`);
+
+            // Clear inactive users from the database
+            logger.debug(`Calling database.clearInactiveUsers for guild ${interaction.guild.id}`);
+            const clearedCount = await database.clearInactiveUsers(interaction.guild.id, activeUserIds);
+            logger.debug(`Cleared ${clearedCount} inactive users`);
+
+            const embed = new CustomEmbedBuilder()
+                .setTitle("Limpieza de Usuarios Inactivos")
+                .setDescription(`Se han limpiado ${clearedCount} usuarios inactivos de la base de datos.`)
+                .setColor("#00FF00")
+                .build();
+
+            logger.info(`Usuarios inactivos limpiados.`, {
+                commandName: 'nivel',
+                userId: interaction.user.id,
+                guildId: interaction.guild.id,
+                clearedCount: clearedCount
+            });
+
+            return [{embeds: [embed]}];
+        } catch (error) {
+            logger.error("Error al limpiar usuarios inactivos", error, {
+                commandName: 'nivel',
+                userId: interaction.user.id,
+                guildId: interaction.guild.id,
+                errorMessage: error.message,
+                errorStack: error.stack
+            });
+
+            const errorEmbed = new CustomEmbedBuilder()
+                .setTitle("Error")
+                .setDescription(`Ocurrió un error al limpiar usuarios inactivos: ${error.message}`)
+                .setColor("#FF0000")
+                .build();
+
+            return [{embeds: [errorEmbed], ephemeral: true}];
+        }
     }
-};
+}

@@ -282,6 +282,27 @@ class Database {
         return { xp, level, changes: result.changes };
     }
 
+    async clearInactiveUsers(guildId, activeUserIds) {
+        return new Promise((resolve, reject) => {
+            const placeholders = activeUserIds.map(() => '?').join(',');
+            const sql = `DELETE FROM levels WHERE guild_id = ? AND user_id NOT IN (${placeholders})`;
+            const params = [guildId, ...activeUserIds];
+
+            logger.debug(`Executing SQL: ${sql}`);
+            logger.debug(`Parameters: guildId=${guildId}, activeUserIds.length=${activeUserIds.length}`);
+
+            this.levelsDb.run(sql, params, function(err) {
+                if (err) {
+                    logger.error(`Error clearing inactive users for guild ${guildId}`, err);
+                    reject(err);
+                } else {
+                    logger.info(`Cleared ${this.changes} inactive users for guild ${guildId}`);
+                    resolve(this.changes);
+                }
+            });
+        });
+    }
+    
     async resetUserLevel(guildId, userId) {
         const result = await this.run(
             'DELETE FROM levels WHERE guild_id = ? AND user_id = ?',
