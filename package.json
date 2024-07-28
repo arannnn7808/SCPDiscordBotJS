@@ -18,6 +18,7 @@
     "@discordjs/rest": "^2.3.0",
     "@discordjs/voice": "^0.17.0",
     "@vitalets/google-translate-api": "^9.2.0",
+    "canvas": "^2.11.2",
     "discord.js": "^14.15.3",
     "dotenv": "^16.4.5",
     "ffmpeg-static": "^5.2.0",

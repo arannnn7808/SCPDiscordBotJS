@@ -1,4 +1,5 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
+const { SlashCommandBuilder, PermissionFlagsBits, AttachmentBuilder } = require("discord.js");
+const { createCanvas, loadImage } = require('canvas');
 const CustomEmbedBuilder = require("../../utils/embedBuilder");
 const ErrorHandler = require("../../utils/errorHandler");
 const logger = require("../../utils/logger");
@@ -99,28 +100,45 @@ module.exports = {
                 guildId: interaction.guild.id
             });
 
-            const noDataEmbed = new CustomEmbedBuilder()
-                .setTitle(`Sin datos de nivel`)
-                .setDescription(`${targetUser.toString()} no tiene ningún nivel registrado.`)
-                .setColor("#FFA500")
-                .build();
-
-            return [{embeds: [noDataEmbed]}];
+            return [{content: `${targetUser.toString()} no tiene ningún nivel registrado.`, ephemeral: true}];
         }
 
         const nextLevelXP = (database.calculateLevel(userData.xp) + 1) * 100;
 
-        const embed = new CustomEmbedBuilder()
-            .setTitle(`Nivel de ${targetUser.username}`)
-            .setDescription(`Información de nivel para ${targetUser.toString()}`)
-            .addField("Nivel", userData.level.toString(), true)
-            .addField("XP", userData.xp.toString(), true)
-            .addField("XP para el siguiente nivel", (nextLevelXP - userData.xp).toString(), true)
-            .setColor("#00FF00")
-            .setThumbnail(targetUser.displayAvatarURL({dynamic: true}))
-            .build();
+        // Crear un canvas
+        const canvas = createCanvas(400, 200);
+        const ctx = canvas.getContext('2d');
 
-        return [{embeds: [embed]}];
+        // Dibujar el fondo
+        ctx.fillStyle = '#36393f';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Cargar y dibujar el avatar
+        const avatar = await loadImage(targetUser.displayAvatarURL({ extension: 'png', size: 128 }));
+        ctx.drawImage(avatar, 25, 25, 150, 150);
+
+        // Dibujar el nombre del usuario
+        ctx.font = '30px sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(targetUser.username, 200, 50);
+
+        // Dibujar el nivel
+        ctx.font = '40px sans-serif';
+        ctx.fillStyle = '#7289da';
+        ctx.fillText(`Nivel ${userData.level}`, 200, 100);
+
+        // Dibujar el XP
+        ctx.font = '20px sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(`XP: ${userData.xp}/${nextLevelXP}`, 200, 140);
+
+        // Convertir el canvas a un buffer
+        const buffer = canvas.toBuffer('image/png');
+
+        // Crear un AttachmentBuilder con el buffer
+        const attachment = new AttachmentBuilder(buffer, { name: 'level.png' });
+
+        return [{files: [attachment]}];
     },
 
     async showLeaderboard(interaction) {
