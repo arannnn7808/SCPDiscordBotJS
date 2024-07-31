@@ -16,25 +16,20 @@ class Logger {
     let logMessage = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
 
     if (Object.keys(meta).length > 0) {
-      const metaString = util
-          .inspect(meta, { depth: null, colors: false })
-          .replace(/\n/g, " ");
+      const metaString = util.inspect(meta, { depth: null, colors: false }).replace(/\n/g, " ");
       logMessage += ` ${metaString}`;
     }
 
-    const logFile = path.join(
-        this.logDir,
-        `${new Date().toISOString().split("T")[0]}.log`,
-    );
+    const logFile = path.join(this.logDir, `${new Date().toISOString().split("T")[0]}.log`);
 
     console.log(logMessage);
     fs.appendFileSync(logFile, logMessage + "\n");
   }
 
   formatError(error) {
-    let errorName = error instanceof DiscordAPIError ? 'DiscordAPIError' : (error.name || 'Error');
-    let errorCode = error instanceof DiscordAPIError ? error.code : (error.code || 'N/A');
-    let errorMessage = error.message || 'Unknown error';
+    const errorName = error instanceof DiscordAPIError ? 'DiscordAPIError' : (error.name || 'Error');
+    const errorCode = error instanceof DiscordAPIError ? error.code : (error.code || 'N/A');
+    const errorMessage = error.message || 'Unknown error';
 
     let formattedError = `Error: ${errorName}[${errorCode}]: ${errorMessage}\n`;
     formattedError += `Location: ${this.getErrorLocation(error)}\n`;
@@ -105,19 +100,11 @@ class Logger {
   }
 
   command(commandName, user, guild, meta = {}) {
-    this._log(
-        "INFO",
-        `Command '${commandName}' executed by ${user.tag} in guild '${guild?.name || "DM"}'`,
-        meta,
-    );
+    this._log("INFO", `Command '${commandName}' executed by ${user.tag} in guild '${guild?.name || "DM"}'`, meta);
   }
 
   interaction(type, user, guild, meta = {}) {
-    this._log(
-        "INFO",
-        `${type} interaction by ${user.tag} in guild '${guild?.name || "DM"}'`,
-        meta,
-    );
+    this._log("INFO", `${type} interaction by ${user.tag} in guild '${guild?.name || "DM"}'`, meta);
   }
 }
 

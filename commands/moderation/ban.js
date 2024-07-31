@@ -3,27 +3,15 @@ const logger = require("../../utils/logger");
 const ErrorHandler = require("../../utils/errorHandler");
 const CustomEmbedBuilder = require("../../utils/embedBuilder");
 
-class CommandError extends Error {
-  constructor(code, message, level = "error") {
-    super(message);
-    this.name = "CommandError";
-    this.code = code;
-    this.level = level;
-  }
-}
-
 module.exports = {
   data: new SlashCommandBuilder()
       .setName("ban")
       .setDescription("Banea a un usuario del servidor")
       .addUserOption((option) =>
-          option
-              .setName("usuario")
-              .setDescription("Usuario que deseas banear")
-              .setRequired(true),
+          option.setName("usuario").setDescription("Usuario que deseas banear").setRequired(true)
       )
       .addStringOption((option) =>
-          option.setName("razon").setDescription("Razón del ban").setRequired(true),
+          option.setName("razon").setDescription("Razón del ban").setRequired(true)
       )
       .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
   folder: "moderation",
@@ -35,59 +23,32 @@ module.exports = {
       const reason = interaction.options.getString("razon");
 
       if (!interaction.member.permissions.has(PermissionFlagsBits.BanMembers)) {
-        throw new CommandError(
-            "MISSING_PERMISSIONS",
-            "No tienes permiso para banear miembros en este servidor.",
-        );
+        return [{ content: "No tienes permiso para banear miembros en este servidor.", ephemeral: true }];
       }
 
       if (!targetUser) {
-        throw new CommandError(
-            "USER_NOT_FOUND",
-            "El usuario especificado no está en el servidor.",
-        );
+        return [{ content: "El usuario especificado no está en el servidor.", ephemeral: true }];
       }
 
       if (targetUser.id === interaction.guild.ownerId) {
-        throw new CommandError(
-            "CANNOT_BAN_OWNER",
-            "No puedes banear al dueño del servidor.",
-            "info",
-        );
+        return [{ content: "No puedes banear al dueño del servidor.", ephemeral: true }];
       }
 
-      if (
-          interaction.guild.members.me.roles.highest.position <=
-          targetUser.roles.highest.position
-      ) {
-        throw new CommandError(
-            "BOT_HIERARCHY_ERROR",
-            "No puedo banear a este usuario. Su rol es superior o igual al mío.",
-            "info",
-        );
+      if (interaction.guild.members.me.roles.highest.position <= targetUser.roles.highest.position) {
+        return [{ content: "No puedo banear a este usuario. Su rol es superior o igual al mío.", ephemeral: true }];
       }
 
-      if (
-          interaction.member.roles.highest.position <=
-          targetUser.roles.highest.position
-      ) {
-        throw new CommandError(
-            "USER_HIERARCHY_ERROR",
-            "No puedes banear a este usuario. Su rol es superior o igual al tuyo.",
-            "info",
-        );
+      if (interaction.member.roles.highest.position <= targetUser.roles.highest.position) {
+        return [{ content: "No puedes banear a este usuario. Su rol es superior o igual al tuyo.", ephemeral: true }];
       }
 
       await interaction.guild.members.ban(targetUser, { reason });
 
-      logger.info(
-          `User ${targetUser.user.tag} was banned by ${interaction.user.tag}`,
-          {
-            guildId: interaction.guild.id,
-            targetUserId: targetUser.id,
-            reason: reason,
-          }
-      );
+      logger.info(`User ${targetUser.user.tag} was banned by ${interaction.user.tag}`, {
+        guildId: interaction.guild.id,
+        targetUserId: targetUser.id,
+        reason: reason,
+      });
 
       const successEmbed = new CustomEmbedBuilder()
           .setTitle("Usuario Baneado")

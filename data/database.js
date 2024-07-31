@@ -9,36 +9,28 @@ class Database {
         this.warningsDb = null;
         this.levelsDb = null;
         this.currentSchema = {
-            warnings: `
-                CREATE TABLE IF NOT EXISTS warnings (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    guild_id TEXT,
-                    user_id TEXT,
-                    warn_id INTEGER,
-                    reason TEXT,
-                    moderator_id TEXT,
-                    timestamp INTEGER,
-                    UNIQUE(guild_id, user_id, warn_id)
-                )
-            `,
-            levels: `
-                CREATE TABLE IF NOT EXISTS levels (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    guild_id TEXT,
-                    user_id TEXT,
-                    xp INTEGER DEFAULT 0,
-                    level INTEGER DEFAULT 0,
-                    last_message_timestamp INTEGER,
-                    UNIQUE(guild_id, user_id)
-                )
-            `,
+            warnings: `CREATE TABLE IF NOT EXISTS warnings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                guild_id TEXT,
+                user_id TEXT,
+                warn_id INTEGER,
+                reason TEXT,
+                moderator_id TEXT,
+                timestamp INTEGER,
+                UNIQUE(guild_id, user_id, warn_id)
+            )`,
+            levels: `CREATE TABLE IF NOT EXISTS levels (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                guild_id TEXT,
+                user_id TEXT,
+                xp INTEGER DEFAULT 0,
+                level INTEGER DEFAULT 0,
+                last_message_timestamp INTEGER,
+                UNIQUE(guild_id, user_id)
+            )`,
             indexes: {
-                warnings: [
-                    'CREATE INDEX IF NOT EXISTS idx_guild_user ON warnings(guild_id, user_id)'
-                ],
-                levels: [
-                    'CREATE INDEX IF NOT EXISTS idx_levels_guild_user ON levels(guild_id, user_id)'
-                ]
+                warnings: ['CREATE INDEX IF NOT EXISTS idx_guild_user ON warnings(guild_id, user_id)'],
+                levels: ['CREATE INDEX IF NOT EXISTS idx_levels_guild_user ON levels(guild_id, user_id)']
             }
         };
     }
@@ -83,7 +75,6 @@ class Database {
     async checkAndUpdateSchema(dbName) {
         const currentColumns = await this.getTableInfo(dbName, dbName);
         const schemaColumns = this.extractColumnsFromSchema(this.currentSchema[dbName]);
-
         const missingColumns = schemaColumns.filter(col => !currentColumns.includes(col));
         for (const column of missingColumns) {
             await this.addColumn(dbName, dbName, column);
@@ -166,7 +157,6 @@ class Database {
         });
     }
 
-    // Warnings methods
     async addWarning(guildId, userId, reason, moderatorId) {
         const warnId = await this.getNextWarnId(guildId, userId);
         const result = await this.run(
@@ -233,7 +223,6 @@ class Database {
         );
     }
 
-    // Levels methods
     async addXP(guildId, userId, xpToAdd) {
         const user = await this.getUser(guildId, userId);
         if (user) {
@@ -283,26 +272,14 @@ class Database {
     }
 
     async clearInactiveUsers(guildId, activeUserIds) {
-        return new Promise((resolve, reject) => {
-            const placeholders = activeUserIds.map(() => '?').join(',');
-            const sql = `DELETE FROM levels WHERE guild_id = ? AND user_id NOT IN (${placeholders})`;
-            const params = [guildId, ...activeUserIds];
-
-            logger.debug(`Executing SQL: ${sql}`);
-            logger.debug(`Parameters: guildId=${guildId}, activeUserIds.length=${activeUserIds.length}`);
-
-            this.levelsDb.run(sql, params, function(err) {
-                if (err) {
-                    logger.error(`Error clearing inactive users for guild ${guildId}`, err);
-                    reject(err);
-                } else {
-                    logger.info(`Cleared ${this.changes} inactive users for guild ${guildId}`);
-                    resolve(this.changes);
-                }
-            });
-        });
+        const placeholders = activeUserIds.map(() => '?').join(',');
+        const sql = `DELETE FROM levels WHERE guild_id = ? AND user_id NOT IN (${placeholders})`;
+        const params = [guildId, ...activeUserIds];
+        const result = await this.run(sql, params, 'levels');
+        logger.info(`Cleared ${result.changes} inactive users for guild ${guildId}`);
+        return result.changes;
     }
-    
+
     async resetUserLevel(guildId, userId) {
         const result = await this.run(
             'DELETE FROM levels WHERE guild_id = ? AND user_id = ?',
@@ -312,6 +289,24 @@ class Database {
         return result.changes > 0;
     }
 
+    async getAllUsers(guildId) {
+        return this.all(
+            'SELECT * FROM levels WHERE guild_id = ?',
+            [guildId],
+            'levels'
+        );
+    }
+
+    async removeUser(guildId, userId) {
+        const result = await this.run(
+            'DELETE FROM levels WHERE guild_id = ? AND user_id = ?',
+            [guildId, userId],
+            'levels'
+        );
+        logger.info(`Removed user ${userId} from guild ${guildId} database`);
+        return result.changes;
+    }
+    
     async close() {
         await Promise.all([
             this.closeDatabase('warnings'),

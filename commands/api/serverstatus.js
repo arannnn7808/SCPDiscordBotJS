@@ -3,33 +3,23 @@ const config = require("../../config/botConfig");
 const logger = require("../../utils/logger");
 const CustomEmbedBuilder = require("../../utils/embedBuilder");
 const ErrorHandler = require("../../utils/errorHandler");
-const fetch = (...args) =>
-    import("node-fetch").then(({ default: fetch }) => fetch(...args));
+const fetch = (...args) => import("node-fetch").then(({ default: fetch }) => fetch(...args));
 
 const PROXY_URL = "https://api.allorigins.win/raw?url=";
-const CACHE_DURATION = 60000; // 1 minute cache
-const FALLBACK_DURATION = 300000; // 5 minutes fallback duration
-const FETCH_TIMEOUT = 5000; // 5 seconds timeout
+const CACHE_DURATION = 60000;
+const FALLBACK_DURATION = 300000;
+const FETCH_TIMEOUT = 5000;
 
 let cachedData = null;
 let lastFetchTime = 0;
 let isUsingFallback = false;
-
-class CommandError extends Error {
-  constructor(code, message, level = "error") {
-    super(message);
-    this.name = "CommandError";
-    this.code = code;
-    this.level = level;
-  }
-}
 
 module.exports = {
   data: new SlashCommandBuilder()
       .setName("servidor")
       .setDescription("Muestra el estado del servidor y los jugadores activos."),
   folder: "api",
-  cooldown: 30, // 30 seconds cooldown
+  cooldown: 30,
 
   async execute(interaction) {
     try {
@@ -41,23 +31,14 @@ module.exports = {
       });
       return [{ embeds: [embed] }];
     } catch (error) {
-      logger.error("Error in server status command", {
-        error: error.message,
-        stack: error.stack,
-        user: interaction.user.tag,
-        guild: interaction.guild?.name
-      });
+      logger.error("Error in server status command", { error, interaction });
       await ErrorHandler.handle(error, interaction);
     }
   },
 
   async getServerData() {
     const now = Date.now();
-    if (
-        cachedData &&
-        now - lastFetchTime <
-        (isUsingFallback ? FALLBACK_DURATION : CACHE_DURATION)
-    ) {
+    if (cachedData && now - lastFetchTime < (isUsingFallback ? FALLBACK_DURATION : CACHE_DURATION)) {
       return cachedData;
     }
 
@@ -68,22 +49,16 @@ module.exports = {
         lastFetchTime = now;
         isUsingFallback = false;
       } else {
-        throw new CommandError(
-            "NULL_DATA",
-            "Received null data from API",
-            "error",
-        );
+        throw new Error("Received null data from API");
       }
       return data;
     } catch (error) {
-      logger.error("Failed to fetch server data, using fallback", {
-        error: error.message,
-      });
+      logger.error("Failed to fetch server data, using fallback", { error });
       if (cachedData) {
         isUsingFallback = true;
         return cachedData;
       }
-      throw new CommandError("NO_DATA", "No data available", "error");
+      throw new Error("No data available");
     }
   },
 
@@ -93,31 +68,21 @@ module.exports = {
         const data = await this.fetchServerData();
         if (data) return data;
       } catch (error) {
-        logger.warn(`Fetch attempt ${i + 1} failed:`, { error: error.message });
+        logger.warn(`Fetch attempt ${i + 1} failed:`, { error });
         if (i === retries - 1) throw error;
-        await new Promise((resolve) => setTimeout(resolve, 500)); // Wait 0.5 second before retrying
+        await new Promise((resolve) => setTimeout(resolve, 500));
       }
     }
-    throw new CommandError(
-        "FETCH_FAILED",
-        `Failed to fetch data after ${retries} attempts`,
-        "error",
-    );
+    throw new Error(`Failed to fetch data after ${retries} attempts`);
   },
 
   async fetchServerData() {
     const serverId = process.env.SERVER_ID_API;
     if (!serverId) {
-      throw new CommandError(
-          "MISSING_ENV",
-          "SERVER_ID_API is not set in the environment variables",
-          "error",
-      );
+      throw new Error("SERVER_ID_API is not set in the environment variables");
     }
 
-    const targetUrl = encodeURIComponent(
-        `${config.serverStatus.apiBaseUrl}${serverId}`,
-    );
+    const targetUrl = encodeURIComponent(`${config.serverStatus.apiBaseUrl}${serverId}`);
     const proxyUrl = `${PROXY_URL}${targetUrl}`;
 
     const controller = new AbortController();
@@ -128,26 +93,18 @@ module.exports = {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new CommandError(
-            "HTTP_ERROR",
-            `HTTP error! status: ${response.status}`,
-            "error",
-        );
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
       if (!data) {
-        throw new CommandError(
-            "NULL_DATA",
-            "Received null data from API",
-            "error",
-        );
+        throw new Error("Received null data from API");
       }
       this.validateServerData(data);
       return data;
     } catch (error) {
       if (error.name === "AbortError") {
-        throw new CommandError("TIMEOUT", "Request timed out", "error");
+        throw new Error("Request timed out");
       }
       throw error;
     }
@@ -155,72 +112,31 @@ module.exports = {
 
   validateServerData(data) {
     if (!data || typeof data !== "object") {
-      throw new CommandError(
-          "INVALID_DATA",
-          "Invalid server data received",
-          "error",
-      );
+      throw new Error("Invalid server data received");
     }
 
-    const requiredFields = [
-      "online",
-      "players",
-      "version",
-      "friendlyFire",
-      "ip",
-      "port",
-      "info",
-    ];
+    const requiredFields = ["online", "players", "version", "friendlyFire", "ip", "port", "info"];
     for (const field of requiredFields) {
       if (!(field in data)) {
-        throw new CommandError(
-            "MISSING_FIELD",
-            `Missing required field in server data: ${field}`,
-            "error",
-        );
+        throw new Error(`Missing required field in server data: ${field}`);
       }
     }
 
-    // Set default values for optional fields
     data.maxPlayers = data.maxPlayers || "N/A";
   },
 
   createServerEmbed(data) {
-    const serverName = this.stripHtmlTags(
-        data.info || "Server Name Not Available",
-    );
+    const serverName = this.stripHtmlTags(data.info || "Server Name Not Available");
     return new CustomEmbedBuilder()
-        .setColor(
-            data.online
-                ? config.serverStatus.embedColor.online
-                : config.serverStatus.embedColor.offline,
-        )
+        .setColor(data.online ? config.serverStatus.embedColor.online : config.serverStatus.embedColor.offline)
         .setTitle("Estado del Servidor")
         .addField("Nombre", serverName, false)
-        .addField(
-            "Estado",
-            data.online
-                ? config.serverStatusTexts.online
-                : config.serverStatusTexts.offline,
-            true,
-        )
-        .addField(
-            "Jugadores",
-            `${data.players}${data.maxPlayers !== "N/A" ? `/${data.maxPlayers}` : ""}`,
-            true,
-        )
+        .addField("Estado", data.online ? config.serverStatusTexts.online : config.serverStatusTexts.offline, true)
+        .addField("Jugadores", `${data.players}${data.maxPlayers !== "N/A" ? `/${data.maxPlayers}` : ""}`, true)
         .addField("Version", data.version, true)
-        .addField(
-            "Fuego Amigo",
-            data.friendlyFire
-                ? config.serverStatusTexts.friendlyFireEnabled
-                : config.serverStatusTexts.friendlyFireDisabled,
-            true,
-        )
+        .addField("Fuego Amigo", data.friendlyFire ? config.serverStatusTexts.friendlyFireEnabled : config.serverStatusTexts.friendlyFireDisabled, true)
         .setFooter({
-          text: `IP: ${data.ip}:${data.port} | ${
-              config.embeds.footerText
-          }${isUsingFallback ? " | Datos en caché" : ""}`,
+          text: `IP: ${data.ip}:${data.port} | ${config.embeds.footerText}${isUsingFallback ? " | Datos en caché" : ""}`,
         })
         .setThumbnail(process.env.LINK_IMAGE_SERVER)
         .build();

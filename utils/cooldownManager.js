@@ -14,9 +14,7 @@ class CooldownManager {
     const expirationTime = this.cooldowns.get(key);
     if (!expirationTime) return 0;
 
-    const now = Date.now();
-    const timeLeft = expirationTime - now;
-
+    const timeLeft = expirationTime - Date.now();
     if (timeLeft <= 0) {
       this.cooldowns.delete(key);
       return 0;

@@ -25,31 +25,20 @@ module.exports = {
 
     if (!command) {
       logger.warn(`No command matching ${interaction.commandName} was found.`);
-      const errorEmbed = new CustomEmbedBuilder()
-        .setTitle("Comando Desconocido")
-        .setDescription("Este comando no existe.")
-        .setColor("#FF0000")
-        .build();
-      return interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+      return interaction.reply({
+        embeds: [CustomEmbedBuilder.error("Comando Desconocido", "Este comando no existe.")],
+        ephemeral: true
+      });
     }
 
     try {
       await CommandHandler.handle(interaction);
     } catch (error) {
-      logger.error(`Error executing ${interaction.commandName}`, {
-        error: error.message,
-        stack: error.stack,
+      logger.error(`Error executing ${interaction.commandName}`, { error });
+      await interaction.reply({
+        embeds: [CustomEmbedBuilder.error("Error de Comando", "Ocurrió un error al ejecutar este comando.")],
+        ephemeral: true
       });
-      const errorEmbed = new CustomEmbedBuilder()
-        .setTitle("Error de Comando")
-        .setDescription("Ocurrió un error al ejecutar este comando.")
-        .setColor("#FF0000")
-        .build();
-      if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
-      } else {
-        await interaction.followUp({ embeds: [errorEmbed], ephemeral: true });
-      }
     }
   },
 
@@ -60,14 +49,23 @@ module.exports = {
     });
 
     try {
-      if (interaction.customId === "reveal_sender") {
-        // This is now handled in the say.js command file
-        return;
-      } else if (
-        interaction.customId.startsWith("cmd_") ||
-        interaction.customId.startsWith("back_")
-      ) {
-        // These are handled by the help command collector
+      if (interaction.customId.startsWith('blackjack_')) {
+        const blackjackCommand = interaction.client.commands.get('blackjack');
+        if (blackjackCommand) {
+          await blackjackCommand.handleButtonInteraction(interaction);
+        } else {
+          logger.error('Blackjack command not found');
+          await interaction.reply({
+            content: "Error: Comando de Blackjack no encontrado.",
+            ephemeral: true,
+          });
+        }
+      } else if (interaction.customId === "reveal_sender" ||
+          interaction.customId.startsWith("cmd_") ||
+          interaction.customId.startsWith("back_") ||
+          interaction.customId === "warn_previous" ||
+          interaction.customId === "warn_next") {
+        // These are handled by their respective command collectors
         return;
       } else {
         logger.warn(`Prefijo de botón desconocido: ${interaction.customId}`, {
@@ -80,10 +78,7 @@ module.exports = {
         });
       }
     } catch (error) {
-      logger.error(
-        `Error handling button interaction: ${interaction.customId}`,
-        { error: error.message, stack: error.stack },
-      );
+      logger.error(`Error handling button interaction: ${interaction.customId}`, { error });
       await ErrorHandler.handle(error, interaction);
     }
   },
@@ -109,10 +104,7 @@ module.exports = {
         });
       }
     } catch (error) {
-      logger.error(
-        `Error handling select menu interaction: ${interaction.customId}`,
-        { error: error.message, stack: error.stack },
-      );
+      logger.error(`Error handling select menu interaction: ${interaction.customId}`, { error });
       await ErrorHandler.handle(error, interaction);
     }
   },

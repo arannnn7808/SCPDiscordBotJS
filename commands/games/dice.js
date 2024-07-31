@@ -5,15 +5,6 @@ const ErrorHandler = require("../../utils/errorHandler");
 const fs = require('fs');
 const path = require('path');
 
-class CommandError extends Error {
-    constructor(code, message, level = "error") {
-        super(message);
-        this.name = "CommandError";
-        this.code = code;
-        this.level = level;
-    }
-}
-
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("dado")
@@ -28,11 +19,7 @@ module.exports = {
             const imagePath = path.join(__dirname, '..', '..', 'images', 'dices', `${roll}.png`);
 
             if (!fs.existsSync(imagePath)) {
-                throw new CommandError(
-                    "IMAGE_NOT_FOUND",
-                    `No se encontró la imagen del dado: ${imagePath}`,
-                    "error"
-                );
+                throw new Error(`No se encontró la imagen del dado: ${imagePath}`);
             }
 
             const attachment = new AttachmentBuilder(imagePath, { name: `${roll}.png` });

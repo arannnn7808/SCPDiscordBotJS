@@ -6,17 +6,9 @@ class CustomEmbedBuilder {
     this.setDefaults(options);
   }
 
-  setDefaults(options) {
-    const {
-      color = "#0099ff",
-      footer = { text: "Bot de Ayuda" },
-      timestamp = true,
-    } = options;
-
-    this.setColor(color);
-    this.setFooter(footer);
+  setDefaults({ color = "#0099ff", footer = { text: "Bot de Ayuda" }, timestamp = true }) {
+    this.setColor(color).setFooter(footer);
     if (timestamp) this.setTimestamp();
-
     return this;
   }
 
@@ -27,19 +19,14 @@ class CustomEmbedBuilder {
 
   setDescription(description) {
     if (description) {
-      const safeDescription = String(description).slice(0, 4096);
-      this.embed.setDescription(safeDescription);
+      this.embed.setDescription(String(description).slice(0, 4096));
     }
     return this;
   }
 
   addField(name, value, inline = false) {
     if (name && value) {
-      this.embed.addFields({
-        name: String(name),
-        value: String(value),
-        inline,
-      });
+      this.embed.addFields({ name: String(name), value: String(value), inline });
     }
     return this;
   }
@@ -61,11 +48,7 @@ class CustomEmbedBuilder {
 
   setFooter(options) {
     if (options) {
-      if (typeof options === "string") {
-        this.embed.setFooter({ text: options });
-      } else {
-        this.embed.setFooter(options);
-      }
+      this.embed.setFooter(typeof options === "string" ? { text: options } : options);
     }
     return this;
   }
@@ -90,10 +73,7 @@ class CustomEmbedBuilder {
   }
 
   static quick(title, description, color = "#0099ff") {
-    return new CustomEmbedBuilder({ color })
-      .setTitle(title)
-      .setDescription(description)
-      .build();
+    return new CustomEmbedBuilder({ color }).setTitle(title).setDescription(description).build();
   }
 
   static error(title, description) {

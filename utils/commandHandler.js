@@ -15,7 +15,6 @@ class CommandHandler {
 
   async handle(interaction) {
     const command = interaction.client.commands.get(interaction.commandName);
-
     if (!command) {
       logger.warn(`No command matching ${interaction.commandName} was found.`);
       return;
@@ -23,20 +22,25 @@ class CommandHandler {
 
     try {
       await this.prepareInteraction(interaction, command);
-
-      if (!(await this.checkPermissions(interaction, command))) {
-        return;
-      }
+      if (!(await this.checkPermissions(interaction, command))) return;
 
       const cooldownCheck = await this.checkCooldown(interaction, command);
       if (!cooldownCheck.result) {
-        return await this.sendMultiResponse(interaction, [cooldownCheck.response]);
+        return await this.sendResponse(interaction, cooldownCheck.response);
       }
 
-      const response = await command.execute(interaction);
-
-      if (response) {
-        await this.sendMultiResponse(interaction, response);
+      const commandResponse = await command.execute(interaction);
+      if (commandResponse) {
+        if (Array.isArray(commandResponse)) {
+          await this.sendMultiResponse(interaction, commandResponse);
+        } else if (typeof commandResponse === 'object' && commandResponse.response) {
+          const message = await this.sendResponse(interaction, commandResponse.response);
+          if (typeof commandResponse.afterResponse === 'function') {
+            commandResponse.afterResponse(message);
+          }
+        } else {
+          await this.sendResponse(interaction, commandResponse);
+        }
       }
 
       logger.command(command.data.name, interaction.user, interaction.guild);
@@ -49,51 +53,57 @@ class CommandHandler {
     if (!interaction.deferred && !interaction.replied) {
       await interaction.deferReply({ ephemeral: command.ephemeral || false });
     }
-    logger.debug(`Interaction prepared for command: ${command.data.name}`);
   }
 
-  async sendMultiResponse(interaction, response) {
+  async sendResponse(interaction, response) {
     if (!response) return;
 
-    if (Array.isArray(response)) {
-      // Handle multiple responses
-      for (let i = 0; i < response.length; i++) {
+    try {
+      let message;
+      if (interaction.deferred || interaction.replied) {
+        message = await interaction.editReply(response);
+      } else {
+        message = await interaction.reply({ ...response, fetchReply: true });
+      }
+      return message;
+    } catch (error) {
+      logger.error("Error sending command response", {
+        error: error.message,
+        stack: error.stack,
+        commandName: interaction.commandName,
+      });
+    }
+  }
+
+  async sendMultiResponse(interaction, responses) {
+    if (!responses || responses.length === 0) return;
+
+    try {
+      for (let i = 0; i < responses.length; i++) {
+        const response = responses[i];
         if (i === 0) {
-          // Send the first response as a reply or edit
-          if (interaction.deferred) {
-            await interaction.editReply(response[i]);
-          } else if (!interaction.replied) {
-            await interaction.reply(response[i]);
-          }
+          await this.sendResponse(interaction, response);
         } else {
-          // Send subsequent responses as follow-ups
-          await interaction.followUp(response[i]);
+          await interaction.followUp(response);
         }
       }
-    } else {
-      // Handle single response
-      if (interaction.deferred) {
-        await interaction.editReply(response);
-      } else if (!interaction.replied) {
-        await interaction.reply(response);
-      }
+    } catch (error) {
+      logger.error("Error sending multi-response", {
+        error: error.message,
+        stack: error.stack,
+        commandName: interaction.commandName,
+      });
     }
   }
 
   async checkPermissions(interaction, command) {
     if (command.permissions) {
-      const hasPermission = await PermissionCheck.check(
-          interaction,
-          command.permissions
-      );
+      const hasPermission = await PermissionCheck.check(interaction, command.permissions);
       if (!hasPermission) {
-        logger.warn(
-            `Permission check failed for command: ${command.data.name}`,
-            {
-              userId: interaction.user.id,
-              guildId: interaction.guild?.id,
-            }
-        );
+        logger.warn(`Permission check failed for command: ${command.data.name}`, {
+          userId: interaction.user.id,
+          guildId: interaction.guild?.id,
+        });
         return false;
       }
     }
@@ -101,7 +111,7 @@ class CommandHandler {
   }
 
   async checkCooldown(interaction, command) {
-    if (!command.cooldown) return true;
+    if (!command.cooldown) return { result: true };
 
     if (!this.cooldowns.has(command.data.name)) {
       this.cooldowns.set(command.data.name, new Collection());
@@ -130,21 +140,6 @@ class CommandHandler {
     setTimeout(() => timestamps.delete(interaction.user.id), cooldownAmount);
 
     return { result: true };
-  }
-
-  static getTargetUser(interaction) {
-    const targetUser =
-        interaction.options.getUser("usuario") ||
-        interaction.options.getMember("usuario");
-    if (!targetUser) {
-      logger.warn(
-          `Target user not found for command: ${interaction.commandName}`
-      );
-      throw new Error(
-          "El usuario especificado no se encuentra en el servidor."
-      );
-    }
-    return targetUser;
   }
 }
 

@@ -3,23 +3,12 @@ const CustomEmbedBuilder = require("../../utils/embedBuilder");
 const ErrorHandler = require("../../utils/errorHandler");
 const logger = require("../../utils/logger");
 
-class CommandError extends Error {
-  constructor(code, message, level = "error") {
-    super(message);
-    this.name = "CommandError";
-    this.code = code;
-    this.level = level;
-  }
-}
-
 module.exports = {
   data: new SlashCommandBuilder()
       .setName("userinfo")
       .setDescription("Obtén información sobre un usuario.")
       .addUserOption((option) =>
-          option
-              .setName("usuario")
-              .setDescription("El usuario del que quieres obtener información"),
+          option.setName("usuario").setDescription("El usuario del que quieres obtener información")
       )
       .setDefaultMemberPermissions(PermissionFlagsBits.SendMessages),
   folder: "utility",
@@ -28,18 +17,14 @@ module.exports = {
 
   async execute(interaction) {
     try {
-      const targetUser =
-          interaction.options.getUser("usuario") || interaction.user;
+      const targetUser = interaction.options.getUser("usuario") || interaction.user;
       const member = await interaction.guild.members.fetch(targetUser.id);
 
       if (!member) {
-        throw new CommandError(
-            "USER_NOT_FOUND",
-            "El usuario especificado no está en el servidor.",
-        );
+        throw new Error("El usuario especificado no está en el servidor.");
       }
 
-      const embed = await this.createUserInfoEmbed(member, interaction);
+      const embed = this.createUserInfoEmbed(member, interaction);
       logger.info(`Userinfo command executed for ${targetUser.tag}`, {
         executor: interaction.user.tag,
         guildId: interaction.guild.id,
@@ -67,12 +52,12 @@ module.exports = {
         .addField(
             "Cuenta Creada",
             `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`,
-            true,
+            true
         )
         .addField(
             "Se Unió al Servidor",
             `<t:${Math.floor(member.joinedTimestamp / 1000)}:R>`,
-            true,
+            true
         )
         .addField("Roles", roles.length ? roles.join(", ") : "Ninguno")
         .addField("Es un Bot", member.user.bot ? "Sí" : "No", true)

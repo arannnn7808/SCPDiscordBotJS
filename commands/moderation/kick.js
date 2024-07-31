@@ -3,30 +3,15 @@ const logger = require("../../utils/logger");
 const ErrorHandler = require("../../utils/errorHandler");
 const CustomEmbedBuilder = require("../../utils/embedBuilder");
 
-class CommandError extends Error {
-  constructor(code, message, level = "error") {
-    super(message);
-    this.name = "CommandError";
-    this.code = code;
-    this.level = level;
-  }
-}
-
 module.exports = {
   data: new SlashCommandBuilder()
       .setName("kick")
       .setDescription("Expulsa a un usuario del servidor")
       .addUserOption((option) =>
-          option
-              .setName("usuario")
-              .setDescription("Usuario que deseas expulsar")
-              .setRequired(true),
+          option.setName("usuario").setDescription("Usuario que deseas expulsar").setRequired(true)
       )
       .addStringOption((option) =>
-          option
-              .setName("razon")
-              .setDescription("Razón de la expulsión")
-              .setRequired(false),
+          option.setName("razon").setDescription("Razón de la expulsión").setRequired(false)
       )
       .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers),
   folder: "moderation",
@@ -35,72 +20,38 @@ module.exports = {
   async execute(interaction) {
     try {
       const targetUser = interaction.options.getMember("usuario");
-      const reason =
-          interaction.options.getString("razon") || "No se proporcionó razón";
+      const reason = interaction.options.getString("razon") || "No se proporcionó razón";
 
-      if (
-          !interaction.member.permissions.has(PermissionFlagsBits.KickMembers)
-      ) {
-        throw new CommandError(
-            "MISSING_PERMISSIONS",
-            "No tienes permiso para expulsar miembros en este servidor.",
-        );
+      if (!interaction.member.permissions.has(PermissionFlagsBits.KickMembers)) {
+        return [{ content: "No tienes permiso para expulsar miembros en este servidor.", ephemeral: true }];
       }
 
       if (!targetUser) {
-        throw new CommandError(
-            "USER_NOT_FOUND",
-            "El usuario especificado no está en el servidor.",
-        );
+        return [{ content: "El usuario especificado no está en el servidor.", ephemeral: true }];
       }
 
       if (targetUser.id === interaction.user.id) {
-        throw new CommandError(
-            "SELF_KICK",
-            "No puedes expulsarte a ti mismo.",
-            "info",
-        );
+        return [{ content: "No puedes expulsarte a ti mismo.", ephemeral: true }];
       }
 
       if (targetUser.id === interaction.client.user.id) {
-        throw new CommandError(
-            "BOT_KICK",
-            "No puedo expulsarme a mí mismo.",
-            "info",
-        );
+        return [{ content: "No puedo expulsarme a mí mismo.", ephemeral: true }];
       }
 
-      if (
-          interaction.guild.members.me.roles.highest.position <=
-          targetUser.roles.highest.position
-      ) {
-        throw new CommandError(
-            "BOT_HIERARCHY_ERROR",
-            "No puedo expulsar a este usuario. Su rol es superior o igual al mío.",
-            "info",
-        );
+      if (interaction.guild.members.me.roles.highest.position <= targetUser.roles.highest.position) {
+        return [{ content: "No puedo expulsar a este usuario. Su rol es superior o igual al mío.", ephemeral: true }];
       }
 
-      if (
-          interaction.member.roles.highest.position <=
-          targetUser.roles.highest.position
-      ) {
-        throw new CommandError(
-            "USER_HIERARCHY_ERROR",
-            "No puedes expulsar a este usuario. Su rol es superior o igual al tuyo.",
-            "info",
-        );
+      if (interaction.member.roles.highest.position <= targetUser.roles.highest.position) {
+        return [{ content: "No puedes expulsar a este usuario. Su rol es superior o igual al tuyo.", ephemeral: true }];
       }
 
       await targetUser.kick(reason);
 
-      logger.info(
-          `User ${targetUser.user.tag} was kicked by ${interaction.user.tag}`,
-          {
-            reason: reason,
-            guildId: interaction.guild.id,
-          },
-      );
+      logger.info(`User ${targetUser.user.tag} was kicked by ${interaction.user.tag}`, {
+        reason: reason,
+        guildId: interaction.guild.id,
+      });
 
       const successEmbed = new CustomEmbedBuilder()
           .setTitle("Usuario Expulsado")

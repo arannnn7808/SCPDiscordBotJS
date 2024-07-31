@@ -1,46 +1,29 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
+const { SlashCommandBuilder, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } = require("discord.js");
 const logger = require("../../utils/logger");
 const database = require("../../data/database");
 const CustomEmbedBuilder = require("../../utils/embedBuilder");
 const ErrorHandler = require("../../utils/errorHandler");
-
-class CommandError extends Error {
-    constructor(code, message, level = "error") {
-        super(message);
-        this.name = "CommandError";
-        this.code = code;
-        this.level = level;
-    }
-}
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("warn")
         .setDescription("Gestiona las advertencias de los usuarios")
         .addSubcommand(subcommand =>
-            subcommand
-                .setName("add")
-                .setDescription("Añade una advertencia a un usuario")
+            subcommand.setName("add").setDescription("Añade una advertencia a un usuario")
                 .addUserOption(option => option.setName("usuario").setDescription("Usuario a advertir").setRequired(true))
                 .addStringOption(option => option.setName("razon").setDescription("Razón de la advertencia").setRequired(true))
         )
         .addSubcommand(subcommand =>
-            subcommand
-                .setName("check")
-                .setDescription("Verifica las advertencias de un usuario")
+            subcommand.setName("check").setDescription("Verifica las advertencias de un usuario")
                 .addUserOption(option => option.setName("usuario").setDescription("Usuario a verificar").setRequired(true))
         )
         .addSubcommand(subcommand =>
-            subcommand
-                .setName("remove")
-                .setDescription("Elimina una advertencia de un usuario")
+            subcommand.setName("remove").setDescription("Elimina una advertencia de un usuario")
                 .addUserOption(option => option.setName("usuario").setDescription("Usuario del que eliminar la advertencia").setRequired(true))
                 .addIntegerOption(option => option.setName("warnid").setDescription("ID de la advertencia a eliminar").setRequired(true))
         )
         .addSubcommand(subcommand =>
-            subcommand
-                .setName("clear")
-                .setDescription("Elimina todas las advertencias de un usuario")
+            subcommand.setName("clear").setDescription("Elimina todas las advertencias de un usuario")
                 .addUserOption(option => option.setName("usuario").setDescription("Usuario del que eliminar todas las advertencias").setRequired(true))
         )
         .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
@@ -48,35 +31,34 @@ module.exports = {
     async execute(interaction) {
         try {
             if (!interaction.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
-                throw new CommandError(
-                    "MISSING_PERMISSIONS",
-                    "No tienes permiso para gestionar advertencias.",
-                    "info"
-                );
+                return this.replyOrFollowUp(interaction, { content: "No tienes permisos para gestionar advertencias.", ephemeral: true });
             }
 
             const subcommand = interaction.options.getSubcommand();
             const targetUser = interaction.options.getUser("usuario");
 
-            switch (subcommand) {
-                case "add":
-                    return await this.addWarn(interaction, targetUser);
-                case "check":
-                    return await this.checkWarns(interaction, targetUser);
-                case "remove":
-                    return await this.removeWarn(interaction, targetUser);
-                case "clear":
-                    return await this.clearWarns(interaction, targetUser);
-                default:
-                    throw new CommandError("INVALID_SUBCOMMAND", `Subcomando desconocido: ${subcommand}`);
-            }
+            const subcommands = {
+                add: () => this.addWarn(interaction, targetUser),
+                check: () => this.checkWarns(interaction, targetUser),
+                remove: () => this.removeWarn(interaction, targetUser),
+                clear: () => this.clearWarns(interaction, targetUser)
+            };
+
+            await subcommands[subcommand]();
         } catch (error) {
-            logger.error(`Error in warn command`, error, {
-                subcommand: interaction.options.getSubcommand(),
-                targetUser: interaction.options.getUser("usuario")?.id,
-                executor: interaction.user.id
-            });
+            logger.error("Error inesperado en el comando de warn", error, {interaction});
             await ErrorHandler.handle(error, interaction);
+        }
+    },
+
+    async replyOrFollowUp(interaction, options) {
+        if (!interaction.deferred && !interaction.replied) {
+            await interaction.deferReply({ ephemeral: options.ephemeral });
+            return interaction.editReply(options);
+        } else if (interaction.deferred) {
+            return interaction.editReply(options);
+        } else {
+            return interaction.followUp(options);
         }
     },
 
@@ -117,31 +99,89 @@ module.exports = {
             logger.warn(`Could not send DM to ${targetUser.tag}`);
         });
 
-        return [
-            { embeds: [embed] },
-            { content: "El usuario ha sido notificado por DM.", ephemeral: true }
-        ];
+        await this.replyOrFollowUp(interaction, { embeds: [embed] });
+        await interaction.followUp({ content: "El usuario ha sido notificado por DM.", ephemeral: true });
     },
 
     async checkWarns(interaction, targetUser) {
         const warnings = await database.getWarnings(interaction.guild.id, targetUser.id);
+        const warningsPerPage = 5;
+        const pages = Math.ceil(warnings.length / warningsPerPage);
 
-        const embed = new CustomEmbedBuilder()
-            .setTitle(`Advertencias de ${targetUser.tag}`)
-            .setDescription(warnings.length ? `Este usuario tiene ${warnings.length} advertencia(s)` : "Este usuario no tiene advertencias")
-            .setColor(warnings.length ? "#FFA500" : "#00FF00");
+        if (warnings.length === 0) {
+            return this.replyOrFollowUp(interaction, { embeds: [CustomEmbedBuilder.info(`Advertencias de ${targetUser.tag}`, "Este usuario no tiene advertencias")] });
+        }
 
-        warnings.forEach((warn) => {
-            embed.addField(`Advertencia ${warn.warn_id}`,
-                `**Razón:** ${warn.reason}\n**Moderador:** <@${warn.moderator_id}>\n**Fecha:** ${new Date(warn.timestamp).toLocaleString()}`
+        const generateEmbed = (page) => {
+            const embed = new CustomEmbedBuilder()
+                .setTitle(`Advertencias de ${targetUser.tag}`)
+                .setDescription(`Página ${page + 1} de ${pages}`)
+                .setColor("#FFA500");
+
+            const start = page * warningsPerPage;
+            const pageWarnings = warnings.slice(start, start + warningsPerPage);
+
+            pageWarnings.forEach((warn) => {
+                embed.addField(`Advertencia ${warn.warn_id}`,
+                    `**Razón:** ${warn.reason}\n**Moderador:** <@${warn.moderator_id}>\n**Fecha:** ${new Date(warn.timestamp).toLocaleString()}`
+                );
+            });
+
+            return embed.build();
+        };
+
+        const buttons = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId('warn_previous')
+                    .setLabel('Anterior')
+                    .setStyle(ButtonStyle.Primary),
+                new ButtonBuilder()
+                    .setCustomId('warn_next')
+                    .setLabel('Siguiente')
+                    .setStyle(ButtonStyle.Primary)
             );
+
+        let currentPage = 0;
+
+        const initialMessage = await this.replyOrFollowUp(interaction, {
+            embeds: [generateEmbed(currentPage)],
+            components: [buttons],
+            fetchReply: true
+        });
+
+        const collector = initialMessage.createMessageComponentCollector({
+            componentType: ComponentType.Button,
+            time: 60000
+        });
+
+        collector.on('collect', async i => {
+            if (i.user.id !== interaction.user.id) {
+                return i.reply({ content: 'No puedes usar estos botones.', ephemeral: true });
+            }
+
+            if (i.customId === 'warn_previous') {
+                currentPage = currentPage > 0 ? currentPage - 1 : pages - 1;
+            } else if (i.customId === 'warn_next') {
+                currentPage = currentPage < pages - 1 ? currentPage + 1 : 0;
+            }
+
+            await i.update({
+                embeds: [generateEmbed(currentPage)],
+                components: [buttons]
+            });
+        });
+
+        collector.on('end', () => {
+            initialMessage.edit({ components: [] }).catch(error => {
+                logger.error("Error removing buttons after collector end", error);
+            });
         });
 
         logger.info(`Warnings checked for ${targetUser.tag} by ${interaction.user.tag}`, {
             warningCount: warnings.length,
             guildId: interaction.guild.id
         });
-        return [{ embeds: [embed.build()] }];
     },
 
     async removeWarn(interaction, targetUser) {
@@ -152,14 +192,9 @@ module.exports = {
             logger.info(`Warning #${warnId} removed from ${targetUser.tag} by ${interaction.user.tag}`, {
                 guildId: interaction.guild.id
             });
-            const embed = new CustomEmbedBuilder()
-                .setTitle("Advertencia Eliminada")
-                .setDescription(`Se ha eliminado la advertencia #${warnId} de ${targetUser.tag}`)
-                .setColor("#00FF00")
-                .build();
-            return [{ embeds: [embed] }];
+            await this.replyOrFollowUp(interaction, { embeds: [CustomEmbedBuilder.success("Advertencia Eliminada", `Se ha eliminado la advertencia #${warnId} de ${targetUser.tag}`)] });
         } else {
-            throw new CommandError("WARNING_NOT_FOUND", "No se encontró la advertencia especificada.");
+            await this.replyOrFollowUp(interaction, { embeds: [CustomEmbedBuilder.error("Advertencia No Encontrada", "No se encontró la advertencia especificada.")], ephemeral: true });
         }
     },
 
@@ -170,11 +205,6 @@ module.exports = {
             clearedCount: clearedWarnings,
             guildId: interaction.guild.id
         });
-        const embed = new CustomEmbedBuilder()
-            .setTitle("Advertencias Eliminadas")
-            .setDescription(`Se han eliminado ${clearedWarnings} advertencia(s) de ${targetUser.tag}`)
-            .setColor("#00FF00")
-            .build();
-        return [{ embeds: [embed] }];
+        await this.replyOrFollowUp(interaction, { embeds: [CustomEmbedBuilder.success("Advertencias Eliminadas", `Se han eliminado ${clearedWarnings} advertencia(s) de ${targetUser.tag}`)] });
     }
 };

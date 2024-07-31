@@ -3,9 +3,7 @@ const logger = require("../utils/logger");
 
 function updatePresence(client) {
   client.user.setPresence({
-    activities: [
-      { name: process.env.PRESENCE_TEXT, type: ActivityType.Watching },
-    ],
+    activities: [{ name: process.env.PRESENCE_TEXT, type: ActivityType.Watching }],
     status: PresenceUpdateStatus.Online,
   });
   logger.info("Bot presence updated");
@@ -21,8 +19,7 @@ module.exports = {
 
     updatePresence(client);
 
-    // Update presence every hour
-    setInterval(() => updatePresence(client), 3600000);
+    setInterval(() => updatePresence(client), 3600000); // Update presence every hour
 
     logger.info("Bot is fully operational");
   },

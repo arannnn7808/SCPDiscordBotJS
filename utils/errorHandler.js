@@ -4,38 +4,85 @@ const logger = require("./logger");
 
 class ErrorHandler {
   static async handle(error, interaction) {
-    if (error.name === "CommandError") {
-      if (error.level === "info") {
-        logger.info(error.message, { commandName: interaction.commandName, userId: interaction.user.id, guildId: interaction.guild?.id });
-      } else {
-        logger.error(error.message, { commandName: interaction.commandName, userId: interaction.user.id, guildId: interaction.guild?.id, error });
-      }
-    } else {
-      logger.error(`An error occurred: ${error.message}`, {
-        commandName: interaction.commandName,
-        userId: interaction.user.id,
-        guildId: interaction.guild?.id,
-        error,
-        stack: error.stack
-      });
-    }
+    this.logError(error, interaction);
+    const responseEmbed = this.createErrorEmbed(error);
+    await this.sendErrorResponse(interaction, responseEmbed);
+  }
 
-    let responseEmbed;
+  static logError(error, interaction) {
+    const logMethod = error.name === "CommandError" && error.level === "info" ? logger.info : logger.error;
+    const logMessage = `An error occurred: ${error.message}`;
+    const logContext = {
+      commandName: interaction.commandName,
+      userId: interaction.user.id,
+      guildId: interaction.guild?.id,
+      error,
+      stack: error.stack
+    };
+    logMethod.call(logger, logMessage, logContext);
+  }
 
-    if (error instanceof DiscordAPIError) {
-      responseEmbed = this.handleDiscordAPIError(error);
-    } else if (error.name === "CommandError") {
-      responseEmbed = this.handleCommandError(error);
-    } else if (error instanceof TypeError) {
-      responseEmbed = this.handleTypeError(error);
-    } else if (error instanceof RangeError) {
-      responseEmbed = this.handleRangeError(error);
-    } else if (error instanceof SyntaxError) {
-      responseEmbed = this.handleSyntaxError(error);
-    } else {
-      responseEmbed = this.handleGenericError(error);
-    }
+  static createErrorEmbed(error) {
+    if (error instanceof DiscordAPIError) return this.handleDiscordAPIError(error);
+    if (error.name === "CommandError") return this.handleCommandError(error);
+    if (error instanceof TypeError) return this.handleTypeError(error);
+    if (error instanceof RangeError) return this.handleRangeError(error);
+    if (error instanceof SyntaxError) return this.handleSyntaxError(error);
+    return this.handleGenericError(error);
+  }
 
+  static handleDiscordAPIError(error) {
+    const errorMessages = {
+      50001: "El bot no tiene acceso al canal o servidor requerido.",
+      50013: "El bot no tiene los permisos necesarios para realizar esta acción.",
+      50007: "No se puede enviar mensajes al usuario especificado.",
+      10003: "Canal no encontrado. Verifica que el canal exista y que el bot tenga acceso.",
+      10008: "Mensaje no encontrado. El mensaje puede haber sido eliminado.",
+      30005: "Número máximo de roles del servidor alcanzado (250).",
+      40005: "Solicitud demasiado grande. Intenta enviar algo más pequeño.",
+    };
+    const errorMessage = errorMessages[error.code] || `Error de API de Discord (Código: ${error.code})`;
+    return CustomEmbedBuilder.error("Error de Discord", `${errorMessage}\nUbicación: API de Discord`);
+  }
+
+  static handleCommandError(error) {
+    const errorHandlers = {
+      USER_NOT_FOUND: () => CustomEmbedBuilder.error("Usuario No Encontrado", `${error.message}\nUbicación: Comando del bot (búsqueda de usuario)`),
+      CANNOT_BAN_OWNER: () => CustomEmbedBuilder.error("Acción No Permitida", `${error.message}\nUbicación: Comando de ban`),
+      BOT_HIERARCHY_ERROR: () => CustomEmbedBuilder.info("Jerarquía de Roles", `${error.message}\nUbicación: Comando de moderación`),
+      USER_HIERARCHY_ERROR: () => CustomEmbedBuilder.info("Jerarquía de Roles", `${error.message}\nUbicación: Comando de moderación`),
+      MISSING_PERMISSIONS: () => CustomEmbedBuilder.error("Error de Permisos", `${error.message}\nUbicación: Verificación de permisos del comando`),
+      TRANSLATION_FAILED: () => CustomEmbedBuilder.error("Error de Traducción", `${error.message}\nUbicación: Comando de traducción`),
+      FETCH_FAILED: () => CustomEmbedBuilder.error("Error de Búsqueda", `${error.message}\nUbicación: Comando de servidor`),
+      INVALID_DATA: () => CustomEmbedBuilder.error("Datos Inválidos", `${error.message}\nUbicación: Procesamiento de datos del servidor`),
+    };
+    return (errorHandlers[error.code] || (() => CustomEmbedBuilder.error("Error de Comando", `${error.message}\nUbicación: Ejecución del comando`)))();
+  }
+
+  static handleTypeError(error) {
+    const message = error.message.includes("Cannot read property")
+        ? `Se intentó acceder a una propiedad de un objeto indefinido. Esto puede deberse a datos faltantes o incorrectos.`
+        : `Se ha producido un error de tipo en el bot.`;
+    return CustomEmbedBuilder.error("Error de Tipo", `${message}\nMensaje: ${error.message}\nUbicación: ${this.getErrorLocation(error)}`);
+  }
+
+  static handleRangeError(error) {
+    return CustomEmbedBuilder.error("Error de Rango", `Se ha producido un error de rango.\nMensaje: ${error.message}\nUbicación: ${this.getErrorLocation(error)}`);
+  }
+
+  static handleSyntaxError(error) {
+    return CustomEmbedBuilder.error("Error de Sintaxis", `Se ha producido un error de sintaxis en el código del bot.\nMensaje: ${error.message}\nUbicación: ${this.getErrorLocation(error)}`);
+  }
+
+  static handleGenericError(error) {
+    return CustomEmbedBuilder.error("Error Inesperado", `Ha ocurrido un error inesperado. Por favor, inténtalo de nuevo más tarde.\nMensaje: ${error.message}\nUbicación: ${this.getErrorLocation(error)}`);
+  }
+
+  static getErrorLocation(error) {
+    return error.stack.split('\n')[1].trim();
+  }
+
+  static async sendErrorResponse(interaction, responseEmbed) {
     try {
       if (interaction.deferred) {
         await interaction.editReply({ embeds: [responseEmbed] });
@@ -52,65 +99,6 @@ class ErrorHandler {
         error: replyError
       });
     }
-  }
-
-  static handleDiscordAPIError(error) {
-    const errorMessages = {
-      50001: "El bot no tiene acceso al canal o servidor requerido.",
-      50013: "El bot no tiene los permisos necesarios para realizar esta acción.",
-      50007: "No se puede enviar mensajes al usuario especificado.",
-      10003: "Canal no encontrado. Verifica que el canal exista y que el bot tenga acceso.",
-      10008: "Mensaje no encontrado. El mensaje puede haber sido eliminado.",
-      30005: "Número máximo de roles del servidor alcanzado (250).",
-      40005: "Solicitud demasiado grande. Intenta enviar algo más pequeño.",
-    };
-
-    const errorMessage = errorMessages[error.code] || `Error de API de Discord (Código: ${error.code})`;
-    return CustomEmbedBuilder.error("Error de Discord", `${errorMessage}\nUbicación: API de Discord`);
-  }
-
-  static handleCommandError(error) {
-    if (error.level === "info") {
-      return CustomEmbedBuilder.info("Información", `${error.message}\nUbicación: Comando del bot`);
-    }
-    switch (error.code) {
-      case "USER_NOT_FOUND":
-        return CustomEmbedBuilder.error("Usuario No Encontrado", `${error.message}\nUbicación: Comando del bot (búsqueda de usuario)`);
-      case "CANNOT_BAN_OWNER":
-        return CustomEmbedBuilder.error("Acción No Permitida", `${error.message}\nUbicación: Comando de ban`);
-      case "BOT_HIERARCHY_ERROR":
-      case "USER_HIERARCHY_ERROR":
-        return CustomEmbedBuilder.info("Jerarquía de Roles", `${error.message}\nUbicación: Comando de moderación`);
-      case "MISSING_PERMISSIONS":
-        return CustomEmbedBuilder.error("Error de Permisos", `${error.message}\nUbicación: Verificación de permisos del comando`);
-      case "TRANSLATION_FAILED":
-        return CustomEmbedBuilder.error("Error de Traducción", `${error.message}\nUbicación: Comando de traducción`);
-      case "FETCH_FAILED":
-        return CustomEmbedBuilder.error("Error de Búsqueda", `${error.message}\nUbicación: Comando de servidor`);
-      case "INVALID_DATA":
-        return CustomEmbedBuilder.error("Datos Inválidos", `${error.message}\nUbicación: Procesamiento de datos del servidor`);
-      default:
-        return CustomEmbedBuilder.error("Error de Comando", `${error.message}\nUbicación: Ejecución del comando`);
-    }
-  }
-
-  static handleTypeError(error) {
-    if (error.message.includes("Cannot read property")) {
-      return CustomEmbedBuilder.error("Error de Tipo", `Se intentó acceder a una propiedad de un objeto indefinido. Esto puede deberse a datos faltantes o incorrectos.\nUbicación: ${error.stack.split('\n')[1].trim()}`);
-    }
-    return CustomEmbedBuilder.error("Error de Tipo", `Se ha producido un error de tipo en el bot.\nMensaje: ${error.message}\nUbicación: ${error.stack.split('\n')[1].trim()}`);
-  }
-
-  static handleRangeError(error) {
-    return CustomEmbedBuilder.error("Error de Rango", `Se ha producido un error de rango.\nMensaje: ${error.message}\nUbicación: ${error.stack.split('\n')[1].trim()}`);
-  }
-
-  static handleSyntaxError(error) {
-    return CustomEmbedBuilder.error("Error de Sintaxis", `Se ha producido un error de sintaxis en el código del bot.\nMensaje: ${error.message}\nUbicación: ${error.stack.split('\n')[1].trim()}`);
-  }
-
-  static handleGenericError(error) {
-    return CustomEmbedBuilder.error("Error Inesperado", `Ha ocurrido un error inesperado. Por favor, inténtalo de nuevo más tarde.\nMensaje: ${error.message}\nUbicación: ${error.stack.split('\n')[1].trim()}`);
   }
 
   static init(client) {

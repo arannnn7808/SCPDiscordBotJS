@@ -3,32 +3,15 @@ const logger = require("../../utils/logger");
 const CustomEmbedBuilder = require("../../utils/embedBuilder");
 const ErrorHandler = require("../../utils/errorHandler");
 
-class CommandError extends Error {
-    constructor(code, message, level = "error") {
-        super(message);
-        this.name = "CommandError";
-        this.code = code;
-        this.level = level;
-    }
-}
-
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("timeout")
         .setDescription("Aplica un timeout a un usuario del servidor")
         .addUserOption((option) =>
-            option
-                .setName("usuario")
-                .setDescription("Usuario al que aplicar el timeout")
-                .setRequired(true)
+            option.setName("usuario").setDescription("Usuario al que aplicar el timeout").setRequired(true)
         )
         .addIntegerOption((option) =>
-            option
-                .setName("duracion")
-                .setDescription("Duración del timeout en minutos")
-                .setRequired(true)
-                .setMinValue(1)
-                .setMaxValue(40320) // 4 weeks max
+            option.setName("duracion").setDescription("Duración del timeout en minutos").setRequired(true).setMinValue(1).setMaxValue(40320)
         )
         .addStringOption((option) =>
             option.setName("razon").setDescription("Razón del timeout").setRequired(true)
@@ -44,57 +27,30 @@ module.exports = {
             const reason = interaction.options.getString("razon");
 
             if (!interaction.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
-                throw new CommandError(
-                    "MISSING_PERMISSIONS",
-                    "No tienes permiso para aplicar timeouts en este servidor."
-                );
+                return [{ content: "No tienes permiso para aplicar timeouts en este servidor.", ephemeral: true }];
             }
 
             if (!targetUser) {
-                throw new CommandError(
-                    "USER_NOT_FOUND",
-                    "El usuario especificado no está en el servidor."
-                );
+                return [{ content: "El usuario especificado no está en el servidor.", ephemeral: true }];
             }
 
             if (targetUser.id === interaction.guild.ownerId) {
-                throw new CommandError(
-                    "CANNOT_TIMEOUT_OWNER",
-                    "No puedes aplicar un timeout al dueño del servidor.",
-                    "info"
-                );
+                return [{ content: "No puedes aplicar un timeout al dueño del servidor.", ephemeral: true }];
             }
 
-            if (
-                interaction.guild.members.me.roles.highest.position <=
-                targetUser.roles.highest.position
-            ) {
-                throw new CommandError(
-                    "BOT_HIERARCHY_ERROR",
-                    "No puedo aplicar un timeout a este usuario. Su rol es superior o igual al mío.",
-                    "info"
-                );
+            if (interaction.guild.members.me.roles.highest.position <= targetUser.roles.highest.position) {
+                return [{ content: "No puedo aplicar un timeout a este usuario. Su rol es superior o igual al mío.", ephemeral: true }];
             }
 
-            if (
-                interaction.member.roles.highest.position <=
-                targetUser.roles.highest.position
-            ) {
-                throw new CommandError(
-                    "USER_HIERARCHY_ERROR",
-                    "No puedes aplicar un timeout a este usuario. Su rol es superior o igual al tuyo.",
-                    "info"
-                );
+            if (interaction.member.roles.highest.position <= targetUser.roles.highest.position) {
+                return [{ content: "No puedes aplicar un timeout a este usuario. Su rol es superior o igual al tuyo.", ephemeral: true }];
             }
 
             await targetUser.timeout(duration * 60 * 1000, reason);
 
             logger.info(
                 `User ${targetUser.user.tag} was timed out for ${duration} minutes by ${interaction.user.tag}`,
-                {
-                    reason: reason,
-                    guildId: interaction.guild.id,
-                }
+                { reason: reason, guildId: interaction.guild.id }
             );
 
             const successEmbed = new CustomEmbedBuilder()

@@ -5,19 +5,12 @@ module.exports = {
       online: "#00FF00",
       offline: "#FF0000",
     },
-    cacheDuration: 60000, // 1 minute
+    cacheDuration: 60000,
     maxRetries: 3,
-    retryDelay: 5000, // 5 seconds
+    retryDelay: 5000,
     requiredFields: [
-      "online",
-      "players",
-      "maxPlayers",
-      "version",
-      "friendlyFire",
-      "ip",
-      "port",
-      "serverTech",
-      "name",
+      "online", "players", "maxPlayers", "version", "friendlyFire",
+      "ip", "port", "serverTech", "name",
     ],
   },
   embeds: {
